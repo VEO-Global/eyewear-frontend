@@ -14,3 +14,25 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+### 1. Cách sử dụng trong code (Cho Dev FE)
+
+Đã đóng gói thành Component, không cần config gì thêm.
+
+**Import:**
+
+```jsx
+import Model3dViewer from "../components/common/Model3dViewer";
+```
+
+### ví dụ tại trang product detail
+
+{product.model3dUrl ? (
+<Model3dViewer
+src={product.model3dUrl}
+poster={product.image} // Ảnh hiển thị lúc chờ tải
+height="500px"
+/>
+) : (
+<img src={product.image} alt="2D Only" />
+)}
