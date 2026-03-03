@@ -4,7 +4,7 @@ export function Button({
   variant = "primary",
   size = "md",
   fullWidth = false,
-  className = "",
+  className = "cursor-pointer",
   children,
   ...props
 }) {
@@ -20,6 +20,8 @@ export function Button({
       "border-2 border-teal-600 text-teal-600 hover:bg-teal-50 focus:ring-teal-500",
     ghost:
       "text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-500",
+    danger:
+      " bg-red-500 text-white hover:bg-red-500 hover:shadow-md focus:ring-red-500",
   };
 
   const sizes = {

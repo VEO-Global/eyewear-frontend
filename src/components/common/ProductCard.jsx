@@ -1,22 +1,41 @@
-import React from "react";
-import { Heart, ShoppingBag, ShoppingCart } from "lucide-react";
-import { Button } from "../common/Button";
+import { Heart, ShoppingCart } from "lucide-react";
+import ViewDetail from "./ViewDetail";
+import { Button } from "./Button";
+import { useNavigate } from "react-router-dom";
 
 export function ProductCard({ product }) {
+  const navigate = useNavigate();
+
+  const handleViewDetail = () => {
+    console.log(`Xem chi tiết sản phẩm: ${product.name}`);
+
+    navigate(`/products/${product.id}`);
+  };
+
   return (
     <div
-      className="group overflow-hidden flex flex-col rounded-xl bg-white border border-gray-200
-                transition-all duration-300
-                hover:shadow-2xl hover:border-teal-500 hover:-translate-y-1"
+      className="
+        overflow-hidden flex flex-col rounded-xl bg-white border border-gray-200
+        transition-all duration-300
+        hover:shadow-2xl hover:border-teal-500 hover:-translate-y-1
+      "
     >
-      {" "}
       {/* Product Image */}
-      <div className="h-48 bg-background flex items-center justify-center">
+      <div className="relative group h-48 bg-background overflow-hidden">
         <img
           src={product.image}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-        ></img>
+          alt={product.name}
+          className="
+            w-full h-full object-cover
+            transition-transform duration-500
+            group-hover:scale-110
+          "
+        />
+
+        {/* Overlay ViewDetail */}
+        <ViewDetail onClick={handleViewDetail} />
       </div>
+
       {/* Product Details */}
       <div className="p-6 flex flex-col flex-grow">
         <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -49,18 +68,14 @@ export function ProductCard({ product }) {
         <div className="flex gap-2">
           <Button
             size="sm"
-            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gap-2 cursor-pointer"
           >
-            <ShoppingCart className="w-4 h-4" />
-            Thêm vào giỏ hàng
+            <ShoppingCart className="w-4 h-4 text-white" />
+            <span className="text-white font-medium"> Thêm vào giỏ hàng</span>
           </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="px-3 border-border text-foreground hover:bg-secondary bg-transparent"
-          >
-            <Heart className="w-4 h-4" />
+          <Button size="sm" variant="danger">
+            <Heart className="w-4 h-4 text-white fon" />
           </Button>
         </div>
       </div>
