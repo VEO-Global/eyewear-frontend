@@ -1,12 +1,10 @@
 import React from "react";
 import { Search, ShoppingCart, Menu, X, Glasses, User } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { toast } from "react-toastify";
 export function Header() {
   const navItems = [
-    {
-      label: "Trang chủ",
-      href: "#",
-    },
     {
       label: "Kính có sẵn",
       href: "#",
@@ -28,6 +26,11 @@ export function Header() {
       href: "#",
     },
   ];
+
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+  console.log(user);
+
   return (
     <header className="sticky top-0 z-50 w-full bg-gradient-to-br  from-teal-50 via-white to-blue-50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
@@ -74,16 +77,23 @@ export function Header() {
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center  justify-between gap-8 py-3 border-t border-gray-100 border-none ">
+        <nav className="hidden lg:flex items-center justify-between gap-8 py-3">
           {navItems.map((item) => (
-            <a
+            <button
               key={item.label}
-              href={item.href}
-              className="text-xl font-sans font-medium text-gray-700   hover:text-teal-600 transition-colors relative group"
+              onClick={() => {
+                if (!isAuthenticated) {
+                  toast.warning("Vui lòng đăng nhập để tiếp tục!");
+                  navigate("/auth/login");
+                } else {
+                  navigate(item.href);
+                }
+              }}
+              className="text-3xl font-sans font-medium text-gray-700 hover:text-teal-600 transition-colors relative group cursor-pointer"
             >
               {item.label}
               <span className="absolute inset-x-0 -bottom-3 h-0.5 bg-teal-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left" />
-            </a>
+            </button>
           ))}
         </nav>
       </div>

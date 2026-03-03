@@ -1,4 +1,3 @@
-import HomePages from "./pages/HomePages";
 import AppRouter from "./router/AppRouter";
 
 function App() {

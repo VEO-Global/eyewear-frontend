@@ -1,14 +1,18 @@
 import { Form, Input, Button } from "antd";
-import { Mail, Lock, User, Key } from "lucide-react";
+import { Mail, Lock, User, Key, Phone } from "lucide-react";
 import video from "../assets/video/advertise-video.mp4";
 
 import { Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { registerUser } from "../redux/auth/authSlice";
 export default function RegisterPage() {
   const [form] = Form.useForm();
+  const dispatch = useDispatch();
 
-  const onFinish = (values) => {
-    console.log("Register data:", values);
-  };
+  function onSubmitForm(values) {
+    console.log("Form values:", values);
+    dispatch(registerUser(values));
+  }
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
@@ -41,11 +45,11 @@ export default function RegisterPage() {
             form={form}
             layout="vertical"
             className="mt-10 space-y-6"
-            onFinish={onFinish}
+            onFinish={onSubmitForm}
           >
             {/* Họ tên */}
             <Form.Item
-              name="fullname"
+              name="fullName"
               label="Họ và tên"
               rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
             >
@@ -58,6 +62,32 @@ export default function RegisterPage() {
                 </div>
                 <Input
                   placeholder="Nguyễn Văn A"
+                  bordered={false}
+                  className="w-4/5 px-4"
+                />
+              </div>
+            </Form.Item>
+
+            <Form.Item
+              name="phone"
+              label="Số điện thoại"
+              rules={[
+                { required: true, message: "Vui lòng nhập số điện thoại" },
+                {
+                  pattern: /^[0-9]{9,11}$/,
+                  message: "Số điện thoại không hợp lệ",
+                },
+              ]}
+            >
+              <div
+                className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
+                focus-within:ring-2 focus-within:ring-teal-500"
+              >
+                <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
+                  <Phone />
+                </div>
+                <Input
+                  placeholder="0987654321"
                   bordered={false}
                   className="w-4/5 px-4"
                 />
@@ -94,7 +124,11 @@ export default function RegisterPage() {
               label="Mật khẩu"
               rules={[
                 { required: true, message: "Vui lòng nhập mật khẩu" },
-                { min: 6, message: "Mật khẩu ít nhất 6 ký tự" },
+                {
+                  pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&]).{8,}$/,
+                  message:
+                    "Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa, 1 số, 1 ký tự đặc biệt và không chứa dấu !",
+                },
               ]}
             >
               <div
@@ -145,6 +179,8 @@ export default function RegisterPage() {
                 />
               </div>
             </Form.Item>
+
+            {/* Số điện thoại */}
 
             {/* Submit */}
             <Form.Item>
