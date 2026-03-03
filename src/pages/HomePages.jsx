@@ -4,14 +4,14 @@ import { Header } from "../components/common/Header";
 import { HeroSection } from "../components/homepage/HeroSection";
 import { CustomGlassesProcess } from "../components/homepage/CustomGlassesProcess";
 import { WhyChooseUs } from "../components/homepage/WhyChooseUs";
-import { ProductGrid } from "../components/homepage/ProductionGrid";
+import ProductionGrid from "../components/homepage/ProductionGrid";
 
 export default function HomePages() {
   return (
     <div>
       <HeroSection />
       <ServiceCards />
-      <ProductGrid />
+      <ProductionGrid />
       <CustomGlassesProcess />
       <WhyChooseUs />
     </div>
