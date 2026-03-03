@@ -1,32 +1,91 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+/* eslint-disable no-unused-vars */
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+
+import { motion, AnimatePresence } from "framer-motion";
 
 import MainLayout from "../components/layout/Mainlayout";
 import HomePages from "../pages/HomePages";
 import LoginPage from "../pages/LoginPages";
 import RegisterPages from "../pages/RegisterPages";
-// import ProductsPage from '../pages/ProductsPage'
-// import ProductDetailPage from '../pages/ProductDetailPage'
-// import CartPage from '../pages/CartPage'
-// import LoginPage from '../pages/LoginPage'
-// import NotFound from '../pages/NotFound'
+import StorePage from "../pages/StorePage";
+import ProductDetail from "../pages/ProductDetail";
+import { Scroll } from "lucide-react";
+import ScrollToTop from "../components/common/ScrollToTop";
+
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <>
+      <AnimatePresence mode="wait">
+        <ScrollToTop />
+        <Routes location={location} key={location.pathname}>
+          <Route element={<MainLayout />}>
+            <Route
+              path="/"
+              element={
+                <PageWrapper>
+                  <HomePages />
+                </PageWrapper>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <PageWrapper>
+                  <StorePage />
+                </PageWrapper>
+              }
+            />
+
+            <Route
+              path="/products/:id"
+              element={
+                <PageWrapper>
+                  <ProductDetail />
+                </PageWrapper>
+              }
+            />
+            <Route
+              path="/auth/login"
+              element={
+                <PageWrapper>
+                  <LoginPage />
+                </PageWrapper>
+              }
+            />
+            <Route
+              path="/auth/register"
+              element={
+                <PageWrapper>
+                  <RegisterPages />
+                </PageWrapper>
+              }
+            />
+          </Route>
+        </Routes>
+      </AnimatePresence>
+    </>
+  );
+}
+
+function PageWrapper({ children }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Layout chính */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePages />} />
-          {/* <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/:id" element={<ProductDetailPage />} />
-          <Route path="/cart" element={<CartPage />} /> */}
-          <Route path="/auth/login" element={<LoginPage />} />
-          <Route path="/auth/register" element={<RegisterPages />} />
-        </Route>
-
-        {/* 404 */}
-        {/* <Route path="*" element={<NotFound />} /> */}
-      </Routes>
+      <AnimatedRoutes />
     </BrowserRouter>
   );
 }
