@@ -1,11 +1,13 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
-import { products } from "../../mockdata/data";
 import { ProductCard } from "../common/ProductCard";
 import { Button } from "../common/Button";
 import { NavLink } from "react-router-dom";
+import { useSelector } from "react-redux";
 
 export default function ProductionGrid() {
+  const { products } = useSelector((state) => state.products);
+
   return (
     <section className="py-16 bg-gray-50">
       {" "}
