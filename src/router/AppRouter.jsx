@@ -11,6 +11,8 @@ import StorePage from "../pages/StorePage";
 import ProductDetail from "../pages/ProductDetail";
 import { Scroll } from "lucide-react";
 import ScrollToTop from "../components/common/ScrollToTop";
+import CartPage from "../pages/CartPage";
+import PaymentPage from "../pages/PaymentPage";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -62,6 +64,9 @@ function AnimatedRoutes() {
                 </PageWrapper>
               }
             />
+
+            <Route path="/user/cart" element={<CartPage />}></Route>
+            <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
           </Route>
         </Routes>
       </AnimatePresence>
