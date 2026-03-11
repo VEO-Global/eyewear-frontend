@@ -1,7 +1,148 @@
-import React from "react";
-import { useParams } from "react-router-dom";
-
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { fetchProductById } from "../redux/products/producSlice";
+import { ProductGallery } from "../components/productdetail/ProductGallery";
+import { ProductInfo } from "../components/productdetail/ProductInfor";
+import { VariantSelector } from "../components/productdetail/VariantSelector";
+import { Button } from "../components/common/Button";
+import { ArrowBigLeft, Heart, ShoppingCart } from "lucide-react";
+import { addItem } from "../redux/cart/cartSlice";
+import { toast } from "react-toastify";
 export default function ProductDetail() {
   const { id } = useParams();
-  return <h1>ProductDetail: {id}</h1>;
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { selectedProduct, loading } = useSelector((state) => state.products);
+  const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
+
+  const currentVariant = selectedProduct?.variants?.find(
+    (v) => v.size === selectedSize
+  );
+  useEffect(() => {
+    dispatch(fetchProductById(id));
+  }, [dispatch, id]);
+
+  // set default variant
+  useEffect(() => {
+    if (selectedProduct?.variants?.length) {
+      setSelectedColor(selectedProduct.variants[0]?.color);
+      setSelectedSize(selectedProduct.variants[0]?.size);
+    }
+  }, [selectedProduct]);
+
+  function handleAddToCart(product) {
+    console.log(product);
+
+    dispatch(
+      addItem({
+        productID: product.id,
+        variantID: currentVariant.id,
+        variantPrice: currentVariant.price,
+        name: product.name,
+        brand: product.brand,
+        description: product.description,
+        gender: product.description,
+        material: product.material,
+        imgUrl: product.model3dUrl,
+      })
+    );
+    toast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
+  }
+
+  if (loading || !selectedProduct) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        {/* Spinner */}
+        <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+
+        {/* Message */}
+        <p className="text-muted-foreground text-lg">
+          Đang tải thông tin sản phẩm...
+        </p>
+      </div>
+    );
+  }
+
+  function handleSelectProductVariant(size) {
+    setSelectedSize(size);
+  }
+
+  return (
+    <div className="min-h-screen bg-white selection:bg-gray-900 selection:text-white">
+      {" "}
+      <main className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-12 py-8 md:py-12">
+        <NavLink
+          className="rounded-2xl flex items-center gap-2 bg-white hover:underline"
+          onClick={() => navigate(-1)}
+          style={{ marginBottom: 20 }}
+        >
+          <ArrowBigLeft className="w-5 h-5" />
+          <span>Quay lại</span>
+        </NavLink>
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
+          {/* Left Column - Gallery */}
+          <div className="w-full lg:w-3/5 flex flex-col gap-6">
+            <ProductGallery
+              images={
+                "data:image/jpeg;base64,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"
+              }
+              // selectedImage={selectedImage}
+              // onImageSelect={setSelectedImage}
+            />
+
+            {/* 3D Viewer Button */}
+            {/* {selectedProduct.model3dUrl && (
+              <button
+                onClick={() => setIs3DViewerOpen(true)}
+                className="flex items-center justify-center gap-2 w-full py-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors border border-gray-200"
+              >
+                <BoxIcon size={18} />
+                View in 3D
+              </button>
+            )} */}
+          </div>
+
+          {/* Right Column - Product Details */}
+          <div className="w-full lg:w-2/5 flex flex-col">
+            <div className="sticky top-32">
+              <ProductInfo
+                brand={selectedProduct.brand}
+                name={selectedProduct.name}
+                price={currentVariant?.price || selectedProduct.basePrice}
+                description={selectedProduct.description}
+                material={selectedProduct.material}
+                createdAt={selectedProduct.createdAt}
+              />
+              <VariantSelector
+                variants={selectedProduct.variants}
+                selectedColor={selectedColor}
+                selectedSize={selectedSize}
+                onColorChange={setSelectedColor}
+                onSizeChange={handleSelectProductVariant}
+              />
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
+                  onClick={() => handleAddToCart(selectedProduct)}
+                >
+                  <ShoppingCart className="w-4 h-4 text-white" />
+                  <span className="font-medium text-white">
+                    Thêm vào giỏ hàng
+                  </span>
+                </Button>
+
+                <Button size="sm" variant="danger">
+                  <Heart className="w-4 h-4 text-white" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
