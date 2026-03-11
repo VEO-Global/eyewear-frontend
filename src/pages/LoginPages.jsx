@@ -1,11 +1,38 @@
+/* eslint-disable no-unused-vars */
 import { Key, Mail } from "lucide-react";
 import video from "../assets/video/advertise-video.mp4";
 import { Button, Checkbox, Form, Input } from "antd";
-import { Link } from "react-router-dom";
-import { loginUser } from "../redux/auth/authSlice";
-import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import { fetchProfile, loginUser } from "../redux/auth/authSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { useEffect } from "react";
+import { toast } from "react-toastify";
 export default function LoginPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { isAuthenticated, notificationMessage, notificationType } =
+    useSelector((state) => state.auth);
+
+  async function handleLogin(values) {
+    const result = await dispatch(loginUser(values));
+
+    if (loginUser.fulfilled.match(result)) {
+      dispatch(fetchProfile());
+      toast.success("Đăng nhập thành công");
+      navigate("/");
+    }
+
+    if (loginUser.rejected.match(result)) {
+      toast.error(result.payload || "Sai email hoặc mật khẩu");
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate]);
+
   return (
     <>
       <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
@@ -23,7 +50,7 @@ export default function LoginPage() {
         </div>
 
         {/* RIGHT: Form */}
-        <div className="flex items-center justify-center px-6 py-12 bg-gradient-to-bl  from-teal-50 via-white to-blue-50 overflow-hidden">
+        <div className="flex items-center justify-center px-6 py-12 bg-linear-to-bl  from-teal-50 via-white to-blue-50 overflow-hidden">
           <div className="w-full max-w-md">
             {/* Tiêu đề */}
             <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900">
@@ -43,9 +70,7 @@ export default function LoginPage() {
               <Form
                 layout="vertical"
                 className="mt-10 space-y-6"
-                onFinish={(values) => {
-                  dispatch(loginUser(values));
-                }}
+                onFinish={handleLogin}
               >
                 {/* EMAIL */}
                 <Form.Item
