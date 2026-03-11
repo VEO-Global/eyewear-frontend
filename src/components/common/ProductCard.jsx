@@ -1,4 +1,5 @@
-import { Heart, ShoppingCart } from "lucide-react";
+/* eslint-disable no-unused-vars */
+import { EyeIcon, Heart, ShoppingCart } from "lucide-react";
 import ViewDetail from "./ViewDetail";
 import { Button } from "./Button";
 import { useNavigate } from "react-router-dom";
@@ -7,8 +8,6 @@ export function ProductCard({ product }) {
   const navigate = useNavigate();
 
   const handleViewDetail = () => {
-    console.log(`Xem chi tiết sản phẩm: ${product.name}`);
-
     navigate(`/products/${product.id}`);
   };
 
@@ -21,9 +20,9 @@ export function ProductCard({ product }) {
       "
     >
       {/* Product Image */}
-      <div className="relative group h-48 bg-background overflow-hidden">
+      <div className="relative group h-48 bg-gray-100 overflow-hidden">
         <img
-          src={product.image}
+          src={product.image || "/placeholder.jpg"}
           alt={product.name}
           className="
             w-full h-full object-cover
@@ -33,34 +32,32 @@ export function ProductCard({ product }) {
         />
 
         {/* Overlay ViewDetail */}
-        <ViewDetail onClick={handleViewDetail} />
+        {/* <ViewDetail onClick={handleViewDetail} /> */}
       </div>
 
       {/* Product Details */}
-      <div className="p-6 flex flex-col flex-grow">
-        <h3 className="text-lg font-semibold text-foreground mb-2">
+      <div className="p-6 flex flex-col grow">
+        {/* Product Name */}
+        <h3 className="text-lg font-semibold text-gray-800 mb-2 line-clamp-2">
           {product.name}
         </h3>
 
-        <div className="flex items-center justify-between mb-4 flex-grow">
-          <span className="text-2xl font-bold text-accent">
-            {product.price}
+        {/* Price + Stock */}
+        <div className="flex items-center justify-between mb-4 grow">
+          {/* Price */}
+          <span className="text-xl font-bold ">
+            {product.basePrice?.toLocaleString("vi-VN")} ₫
           </span>
 
+          {/* Stock Status */}
           <span
             className={`text-xs font-semibold px-3 py-1 rounded-full ${
-              product.status === "available"
+              product.isActive
                 ? "bg-green-100 text-green-700"
-                : product.status === "preorder"
-                ? "bg-amber-100 text-amber-700"
-                : "bg-indigo-100 text-indigo-700"
+                : "bg-red-100 text-red-700"
             }`}
           >
-            {product.status === "available"
-              ? "Có sẵn"
-              : product.status === "preorder"
-              ? "Đặt trước"
-              : "Theo yêu cầu"}
+            {product.isActive ? "Còn hàng" : "Hết hàng"}
           </span>
         </div>
 
@@ -68,14 +65,15 @@ export function ProductCard({ product }) {
         <div className="flex gap-2">
           <Button
             size="sm"
-            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gap-2 cursor-pointer"
+            className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
+            onClick={handleViewDetail}
           >
-            <ShoppingCart className="w-4 h-4 text-white" />
-            <span className="text-white font-medium"> Thêm vào giỏ hàng</span>
+            <EyeIcon className="w-4 h-4 text-white" />
+            <span className="font-medium text-white">Xem Chi tiết</span>
           </Button>
 
           <Button size="sm" variant="danger">
-            <Heart className="w-4 h-4 text-white fon" />
+            <Heart className="w-4 h-4 text-white" />
           </Button>
         </div>
       </div>
