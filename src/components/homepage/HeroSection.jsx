@@ -1,7 +1,9 @@
 import React from "react";
 import { ArrowRight, Calendar, Settings } from "lucide-react";
 import { Button } from "../common/Button";
+import { useNavigate } from "react-router-dom";
 export function HeroSection() {
+  const navigate = useNavigate();
   return (
     <section className="relative bg-gradient-to-br from-teal-50 via-white to-amber-50 overflow-hidden">
       {/* Background Decorative Elements */}
@@ -33,6 +35,7 @@ export function HeroSection() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
               <Button
+                onClick={() => navigate("/products")}
                 size="lg"
                 className="shadow-lg shadow-teal-200/50 cursor-pointer"
               >
