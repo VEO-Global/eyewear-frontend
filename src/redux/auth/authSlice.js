@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
 
@@ -13,23 +14,32 @@ const initialState = {
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
     const response = await api.post("/auth/login", values);
-    console.log("Login response:", response);
-    return response.data;
+    return response.data.token;
   } catch (error) {
-    console.log("Login error:", error);
-
-    return rejectWithValue(error.response?.data?.message || "Đăng nhập thất bại. Vui lòng thử lại.");
+    if (error.response?.status === 500) {
+      return rejectWithValue("Sai email hoặc mật khẩu. Vui lòng thử lại.");
+    } else {
+      return rejectWithValue(error.response?.data?.message || "Đăng nhập thất bại. Vui lòng thử lại.");
+    }
   }
 });
 
 export const registerUser = createAsyncThunk("/auth/register", async (values, { rejectWithValue }) => {
   try {
-    console.log("Register values:", values);
-
     const response = await api.post("auth/register", values);
     return response.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || "Đăng kí thất bại vui lòng thử lại");
+  }
+});
+
+export const fetchProfile = createAsyncThunk("/user/profile", async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get("/user/profile");
+
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || "Không thể lấy thông tin user");
   }
 });
 
@@ -51,10 +61,9 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
         state.notificationMessage = "Đăng nhập thành công";
         state.notificationType = "success";
+        localStorage.setItem("token", action.payload);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -78,6 +87,11 @@ const authSlice = createSlice({
         state.error = action.payload;
         state.notificationMessage = action.payload;
         state.notificationType = "error";
+      })
+
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.isAuthenticated = true;
       });
   },
 });
