@@ -2,17 +2,33 @@ import { Form, Input, Button } from "antd";
 import { Mail, Lock, User, Key, Phone } from "lucide-react";
 import video from "../assets/video/advertise-video.mp4";
 
-import { Link } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { registerUser } from "../redux/auth/authSlice";
+import { useEffect } from "react";
+import { toast } from "react-toastify";
 export default function RegisterPage() {
   const [form] = Form.useForm();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  const { notificationMessage, notificationType } = useSelector(
+    (state) => state.auth
+  );
 
   function onSubmitForm(values) {
-    console.log("Form values:", values);
     dispatch(registerUser(values));
   }
+
+  useEffect(() => {
+    if (notificationType === "success") {
+      toast.success(notificationMessage);
+      navigate("auth/login");
+    }
+    if (notificationType === "error") {
+      toast.error(notificationMessage);
+    }
+  }, [notificationMessage, notificationType, navigate]);
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
@@ -30,11 +46,11 @@ export default function RegisterPage() {
       </div>
 
       {/* RIGHT: Register Form */}
-      <div className="flex items-center justify-center px-6 py-12 bg-gradient-to-bl from-teal-50 via-white to-blue-50">
+      <div className="flex items-center justify-center px-6 py-12 bg-linear-to-bl from-teal-50 via-white to-blue-50">
         <div className="w-full max-w-md bg-white/80 backdrop-blur rounded-2xl p-10 shadow-xl">
           {/* Header */}
           <h1 className="text-4xl font-serif font-bold text-gray-900">
-            Tạo tài khoản
+            Tạo tài khoảnH
           </h1>
           <p className="mt-2 text-gray-500">
             Đăng ký để trải nghiệm kính mắt cao cấp
