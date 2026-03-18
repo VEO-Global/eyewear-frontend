@@ -3,11 +3,15 @@ import { EyeIcon, Heart, ShoppingCart } from "lucide-react";
 import ViewDetail from "./ViewDetail";
 import { Button } from "./Button";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { fetchProductById } from "../../redux/products/producSlice";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const handleViewDetail = () => {
+    dispatch(fetchProductById(product.id));
     navigate(`/products/${product.id}`);
   };
 
@@ -47,17 +51,6 @@ export function ProductCard({ product }) {
           {/* Price */}
           <span className="text-xl font-bold ">
             {product.basePrice?.toLocaleString("vi-VN")} ₫
-          </span>
-
-          {/* Stock Status */}
-          <span
-            className={`text-xs font-semibold px-3 py-1 rounded-full ${
-              product.isActive
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-            }`}
-          >
-            {product.isActive ? "Còn hàng" : "Hết hàng"}
           </span>
         </div>
 
