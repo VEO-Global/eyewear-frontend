@@ -85,27 +85,13 @@ export default function ProductList() {
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((prev) => prev + 1)}
-                className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 disabled:opacity-50 transition"
+                className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 disabled:opacity-50 transition cursor-pointer"
               >
                 Next
               </button>
             </div>
           </>
         )}
-
-        {/* ================= EMPTY ================= */}
-        {!loading && products.length === 0 && (
-          <div className="text-center py-20">
-            <p className="text-gray-500 text-lg">Không có sản phẩm nào</p>
-          </div>
-        )}
-
-        {/* Mobile CTA */}
-        <div className="mt-10 text-center md:hidden">
-          <Button variant="outline" fullWidth>
-            Xem tất cả sản phẩm
-          </Button>
-        </div>
       </div>
     </section>
   );
