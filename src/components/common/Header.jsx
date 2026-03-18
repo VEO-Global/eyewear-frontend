@@ -4,9 +4,9 @@ import { Search, ShoppingCart, Menu, X, Glasses, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
-import DesktopActions from "./DeskTopAction";
 import { logout } from "../../redux/auth/authSlice";
 import { Tooltip } from "antd";
+import DropDownMenu from "./DropDownMenu";
 export function Header() {
   const navItems = [
     {
@@ -28,9 +28,18 @@ export function Header() {
   const dispatch = useDispatch();
 
   const { cart, totalProduct } = useSelector((state) => state.cart);
+
+  const [dropDownMenu, setDropDownMenu] = useState(false);
+
+  function toogleDropDownMeni(curr) {
+    setDropDownMenu(!curr);
+  }
+
   function handleLogout() {
     localStorage.removeItem("token");
     dispatch(logout());
+    toast.success("Đăng xuất thành công");
+    navigate("/");
   }
 
   return (
@@ -64,19 +73,32 @@ export function Header() {
             user={user}
             handleLogout={handleLogout}
           /> */}
+
           {/* Desktop Actions */}
           <div className="hidden lg:flex items-center gap-4">
             <div className="flex items-center gap-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors px-3 py-2 rounded-md hover:bg-gray-50">
               <User className="h-5 w-5" />
 
               {isAuthenticated ? (
-                <div className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium">
-                    Xin chào, {user.fullName}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {user.role === "CUSTOMER" ? "Khách hàng" : "Quản trị viên"}
-                  </span>
+                <div className="relative">
+                  <div
+                    className="flex flex-col leading-tight"
+                    onClick={() => toogleDropDownMeni(dropDownMenu)}
+                  >
+                    <span className="text-sm font-medium">
+                      Xin chào, {user.fullName}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {user.role === "CUSTOMER"
+                        ? "Khách hàng"
+                        : "Quản trị viên"}
+                    </span>
+                    <DropDownMenu
+                      openMenu={dropDownMenu}
+                      setOpenMenu={setDropDownMenu}
+                      handleLogout={handleLogout}
+                    />
+                  </div>
                 </div>
               ) : (
                 <Link to="/auth/login" className="text-sm font-medium">
@@ -85,12 +107,12 @@ export function Header() {
               )}
             </div>
 
-            <Tooltip title="Xem tất cả sản phẩm trong giỏ hàng">
+            <Tooltip
+              title="Xem tất cả sản phẩm trong giỏ hàng"
+              onClick={() => navigate("/user/cart")}
+            >
               <div className="relative p-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors">
-                <ShoppingCart
-                  className="h-6 w-6"
-                  onClick={() => navigate("user/cart")}
-                />
+                <ShoppingCart className="h-6 w-6" />
 
                 {totalProduct > 0 && (
                   <span className="absolute top-0 right-0 h-5 w-5 bg-amber-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
