@@ -15,48 +15,61 @@ export function VariantSelector({
   selectedSize,
   onColorChange,
   onSizeChange,
+  selectedProduct,
+  selectedVariant,
 }) {
   const colors = [...new Set(variants.map((v) => v.color))];
   const sizes = [...new Set(variants.map((v) => v.size))];
 
-  const mockColors = [
-    "Matte Black",
-    "Silver",
-    "Gold",
-    "Tortoise",
-    "Brown",
-    "Black",
-  ];
   return (
     <div className="flex flex-col gap-8 py-8">
-      <div className="flex flex-col gap-4">
-        <label className="text-sm font-medium text-gray-900 uppercase tracking-wider">
-          Size
-        </label>
+      <div className="flex justify-between">
+        <div className="flex flex-col gap-4">
+          <label className="text-sm font-medium text-gray-900 uppercase tracking-wider">
+            Kích cỡ
+          </label>
 
-        <div className="flex gap-3">
-          {sizes.map((size) => (
-            <button
-              key={size}
-              onClick={() => onSizeChange(size)}
-              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all border cursor-pointer ${
-                selectedSize === size
-                  ? "bg-black"
-                  : "bg-white text-black border-gray-300 hover:border-black"
-              }`}
-            >
-              <span
-                className={`${
-                  selectedSize === size
-                    ? "text-white"
-                    : "bg-white text-black border-gray-300 hover:border-black"
-                }`}
-              >
-                {" "}
-                {size}
-              </span>
-            </button>
-          ))}
+          <div className="flex gap-3">
+            <>
+              {sizes.map((size) => (
+                <button
+                  key={size}
+                  onClick={() => onSizeChange(size)}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all border cursor-pointer ${
+                    selectedSize === size
+                      ? "bg-black"
+                      : "bg-white text-black border-gray-300 hover:border-black"
+                  }`}
+                >
+                  <span
+                    className={`${
+                      selectedSize === size
+                        ? "text-white"
+                        : "bg-white text-black border-gray-300 hover:border-black"
+                    }`}
+                  >
+                    {" "}
+                    {size}
+                  </span>
+                </button>
+              ))}
+            </>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-900 uppercase tracking-wider px-5">
+            Số Lượng
+          </label>
+          <span
+            className={`mt-6 px-6 ${
+              selectedVariant?.stockQuantity === 0 ? "text-red-700" : ""
+            }`}
+          >
+            {selectedVariant?.stockQuantity === 0
+              ? "Hết hàng"
+              : selectedVariant?.stockQuantity}
+          </span>
         </div>
       </div>
 
@@ -64,7 +77,7 @@ export function VariantSelector({
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <label className="text-sm font-medium text-gray-900 uppercase tracking-wider">
-            Color
+            Màu sắc
           </label>
           <span className="text-sm text-gray-500">{selectedColor}</span>
         </div>
