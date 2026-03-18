@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { fetchProductById } from "../redux/products/producSlice";
@@ -13,13 +13,18 @@ export default function ProductDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const { selectedProduct, loading } = useSelector((state) => state.products);
+
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
+
+  const hasShownToast = useRef(false);
 
   const currentVariant = selectedProduct?.variants?.find(
     (v) => v.size === selectedSize
   );
+
   useEffect(() => {
     dispatch(fetchProductById(id));
   }, [dispatch, id]);
@@ -32,9 +37,13 @@ export default function ProductDetail() {
     }
   }, [selectedProduct]);
 
-  function handleAddToCart(product) {
-    console.log(product);
+  // useEffect(() => {
+  //   if (currentVariant?.stockQuantity === 0) {
+  //     toast.warning("Sản phẩm này đã hết hàng");
+  //   }
+  // }, [currentVariant]);
 
+  function handleAddToCart(product) {
     dispatch(
       addItem({
         productID: product.id,
@@ -43,12 +52,18 @@ export default function ProductDetail() {
         name: product.name,
         brand: product.brand,
         description: product.description,
-        gender: product.description,
         material: product.material,
         imgUrl: product.model3dUrl,
+        gender: product.gender,
+        quantity: currentVariant.stockQuantity,
       })
     );
     toast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
+  }
+
+  function handleNavigateToPreoder(product) {
+    dispatch(fetchProductById(product.id));
+    navigate("/user/preorder");
   }
 
   if (loading || !selectedProduct) {
@@ -114,6 +129,7 @@ export default function ProductDetail() {
                 description={selectedProduct.description}
                 material={selectedProduct.material}
                 createdAt={selectedProduct.createdAt}
+                gender={selectedProduct.gender}
               />
               <VariantSelector
                 variants={selectedProduct.variants}
@@ -121,19 +137,32 @@ export default function ProductDetail() {
                 selectedSize={selectedSize}
                 onColorChange={setSelectedColor}
                 onSizeChange={handleSelectProductVariant}
+                selectedProduct={selectedProduct}
+                selectedVariant={currentVariant}
               />
 
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
-                  onClick={() => handleAddToCart(selectedProduct)}
-                >
-                  <ShoppingCart className="w-4 h-4 text-white" />
-                  <span className="font-medium text-white">
-                    Thêm vào giỏ hàng
-                  </span>
-                </Button>
+                {currentVariant?.stockQuantity === 0 ? (
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
+                    onClick={() => handleNavigateToPreoder(selectedProduct)}
+                  >
+                    <ShoppingCart className="w-4 h-4 text-white" />
+                    <span className="font-medium text-white">Đặt trước</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
+                    onClick={() => handleAddToCart(selectedProduct)}
+                  >
+                    <ShoppingCart className="w-4 h-4 text-white" />
+                    <span className="font-medium text-white">
+                      Thêm sản phầm vào giỏ hàng
+                    </span>
+                  </Button>
+                )}
 
                 <Button size="sm" variant="danger">
                   <Heart className="w-4 h-4 text-white" />
