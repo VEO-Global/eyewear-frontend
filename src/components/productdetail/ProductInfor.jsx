@@ -8,6 +8,7 @@ export function ProductInfo({
   description,
   material,
   createdAt,
+  gender,
 }) {
   return (
     <div className="flex flex-col gap-6 pb-8 border-b border-gray-100">
@@ -46,6 +47,15 @@ export function ProductInfo({
           </span>
           <span className="text-sm font-medium text-gray-900">
             {dayjs(createdAt).format("DD/MM/YYYY")}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500 uppercase tracking-widest">
+            Giới tính
+          </span>
+          <span className="text-sm font-medium text-gray-900">
+            {gender === "Male" ? <span> Nam</span> : <span>Nữ</span>}
           </span>
         </div>
       </div>
