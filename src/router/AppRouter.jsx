@@ -13,13 +13,16 @@ import { Scroll } from "lucide-react";
 import ScrollToTop from "../components/common/ScrollToTop";
 import CartPage from "../pages/CartPage";
 import PaymentPage from "../pages/PaymentPage";
+import UserProfilePage from "../pages/UserProfilePage";
+import PreOrderPage from "../pages/PreOrderPage";
+import AdminDashBoard from "../pages/AdminDashBoard";
 
 function AnimatedRoutes() {
   const location = useLocation();
 
   return (
     <>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         <ScrollToTop />
         <Routes location={location} key={location.pathname}>
           <Route element={<MainLayout />}>
@@ -65,8 +68,14 @@ function AnimatedRoutes() {
               }
             />
 
+            {/* User Route */}
+            <Route path="/user/profile" element={<UserProfilePage />}></Route>
             <Route path="/user/cart" element={<CartPage />}></Route>
             <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
+            <Route path="/user/preorder" element={<PreOrderPage />} />
+
+            {/* Admin Route */}
+            <Route path="/admin/dashboard" element={<AdminDashBoard />}></Route>
           </Route>
         </Routes>
       </AnimatePresence>
