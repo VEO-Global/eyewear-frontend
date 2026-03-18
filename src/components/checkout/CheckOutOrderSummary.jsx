@@ -27,13 +27,17 @@ export default function CheckOutOrderSummary() {
             className="flex justify-between items-center text-sm"
           >
             <div>
-              <p className="font-medium">{item.name}</p>
-              <p className="text-gray-500">x{item.quantity}</p>
+              <p className="font-medium">{`${item.name} (${
+                item.gender === "Male" ? "Nam" : "Nữ"
+              })`}</p>
+              <p className="text-gray-500">Số lượng: {item.quantity}</p>
             </div>
 
-            <p className="font-medium">
-              {formatCurrency(item.variantPrice * item.quantity)}
-            </p>
+            <div className="mb-7">
+              <p className="font-medium">
+                {formatCurrency(item.variantPrice * item.quantity)}
+              </p>
+            </div>
           </div>
         ))}
       </div>
