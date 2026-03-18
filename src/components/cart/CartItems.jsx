@@ -71,6 +71,13 @@ export default function CartItems() {
                       {item.material}
                     </span>
                   </p>
+
+                  <p className="text-sm text-muted-foreground">
+                    Giói tính:{" "}
+                    <span className="font-medium text-foreground">
+                      {item.gender === "Male" ? "Nam" : "Nữ"}
+                    </span>
+                  </p>
                 </div>
               </div>
 
