@@ -1,5 +1,6 @@
 import React from "react";
 import { Form, Input, Button } from "antd";
+import AddressSelector from "../components/checkout/AddressSelector";
 
 export default function CheckOutForm() {
   const [form] = Form.useForm();
@@ -49,9 +50,12 @@ export default function CheckOutForm() {
         name="shippingAddress"
         rules={[{ required: true, message: "Vui lòng nhập địa chỉ giao hàng" }]}
       >
-        <Input.TextArea
-          rows={3}
-          placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
+        <AddressSelector
+          onChange={(address) => {
+            form.setFieldsValue({
+              shippingAddress: address,
+            });
+          }}
         />
       </Form.Item>
 
