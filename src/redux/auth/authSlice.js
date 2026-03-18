@@ -50,6 +50,8 @@ const authSlice = createSlice({
     logout(state) {
       state.user = null;
       state.isAuthenticated = false;
+      state.notificationMessage = "";
+      state.notificationType = null;
     },
   },
   extraReducers: (builder) => {
