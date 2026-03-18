@@ -1,11 +1,10 @@
 import React from "react";
-import { useSelector } from "react-redux";
 import CheckOutForm from "../form/CheckOutForm";
 import CheckOutOrderSummary from "../components/checkout/checkOutOrderSummary";
+import { ArrowBigLeft } from "lucide-react";
+import { NavLink } from "react-router-dom";
 
 export default function CheckoutPage() {
-  const { cart } = useSelector((state) => state.cart);
-
   return (
     <main className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-6xl mx-auto">
@@ -38,18 +37,14 @@ export default function CheckoutPage() {
         </div>
 
         {/* Security Info */}
-        <div className="mt-12 text-center">
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Thông tin của bạn được bảo mật và mã hóa
-          </p>
-        </div>
+        <NavLink
+          className="rounded-2xl flex items-center gap-2 hover:underline"
+          to={"/products"}
+          style={{ marginTop: 20 }}
+        >
+          <ArrowBigLeft className="w-5 h-5" />
+          <span>Tiếp tục xem các sản phẩm khác</span>
+        </NavLink>
       </div>
     </main>
   );
