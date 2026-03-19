@@ -2,16 +2,10 @@
 
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  Trash2,
-  Plus,
-  Minus,
-  ArrowBigLeftIcon,
-  ArrowBigLeft,
-} from "lucide-react";
-import { Button, Tooltip } from "antd";
+import { Trash2, Plus, Minus, ArrowBigLeft } from "lucide-react";
+import { Tooltip } from "antd";
 import { NavLink, useNavigate } from "react-router-dom";
-import { updateQuantity } from "../../redux/cart/cartSlice";
+import { updateQuantity, removeItem } from "../../redux/cart/cartSlice";
 
 export default function CartItems() {
   const { cart, totalProduct } = useSelector((state) => state.cart);
@@ -26,11 +20,12 @@ export default function CartItems() {
       })
     );
   }
+
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-mono font-bold text-foreground">
-          🛒 Giỏ hàng
+          Giỏ hàng
         </h2>
 
         <span className="text-lg font-medium text-muted-foreground">
@@ -38,22 +33,19 @@ export default function CartItems() {
         </span>
       </div>
 
-      <div className="space-y-6 ">
+      <div className="space-y-6">
         {cart.map((item) => (
-          <Tooltip title="Xem chi tiết sản phẩm">
+          <Tooltip key={item.variantID} title="Xem chi tiết sản phẩm">
             <div
-              key={item.variantId}
-              className="group flex gap-6 rounded-lg  bg-card p-6 transition-all hover:shadow-md hover:border-primary/30 cursor-pointer"
+              className="group flex gap-6 rounded-lg bg-card p-6 transition-all hover:shadow-md hover:border-primary/30 cursor-pointer"
               onClick={() => navigate(`/products/${item.productID}`)}
             >
-              {/* Product Image */}
               <div className="flex-shrink-0">
                 <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-xs">
                   No Image
                 </div>
               </div>
 
-              {/* Product Details */}
               <div className="flex-grow min-w-0">
                 <h3 className="text-lg font-semibold text-foreground truncate">
                   {item.name}
@@ -71,9 +63,14 @@ export default function CartItems() {
                       {item.material}
                     </span>
                   </p>
-
                   <p className="text-sm text-muted-foreground">
-                    Giói tính:{" "}
+                    Màu sắc:{" "}
+                    <span className="font-medium text-foreground">
+                      {item.color || "Chưa cập nhật"}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Giới tính:{" "}
                     <span className="font-medium text-foreground">
                       {item.gender === "Male" ? "Nam" : "Nữ"}
                     </span>
@@ -81,8 +78,7 @@ export default function CartItems() {
                 </div>
               </div>
 
-              {/* Quantity Controls */}
-              <div className="flex items-center gap-3 rounded-lg  bg-muted p-2">
+              <div className="flex items-center gap-3 rounded-lg bg-muted p-2">
                 <Tooltip title="Giảm số lượng">
                   <button
                     className="p-1 rounded hover:bg-background transition-colors border border-border cursor-pointer"
@@ -114,14 +110,12 @@ export default function CartItems() {
                 </Tooltip>
               </div>
 
-              {/* Price */}
               <div className="flex flex-col items-end justify-between">
                 <div className="text-2xl font-bold text-foreground mt-8">
                   {(item.variantPrice * item.quantity).toLocaleString("vi-VN")}đ
                 </div>
               </div>
 
-              {/* Remove Button */}
               <div className="flex items-center">
                 <Tooltip title="Xóa sản phẩm">
                   <button
@@ -129,6 +123,7 @@ export default function CartItems() {
                     aria-label="Remove item"
                     onClick={(e) => {
                       e.stopPropagation();
+                      dispatch(removeItem(item.variantID));
                     }}
                   >
                     <Trash2 className="h-5 w-5 text-white" />
@@ -139,6 +134,7 @@ export default function CartItems() {
           </Tooltip>
         ))}
       </div>
+
       <NavLink
         className="rounded-2xl flex items-center gap-2 hover:underline"
         onClick={() => navigate(-1)}

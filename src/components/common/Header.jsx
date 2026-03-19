@@ -1,33 +1,36 @@
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState } from "react";
-import { Search, ShoppingCart, Menu, X, Glasses, User } from "lucide-react";
+import React, { useState } from "react";
+import { Search, ShoppingCart, Glasses, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import { logout } from "../../redux/auth/authSlice";
 import { Tooltip } from "antd";
 import DropDownMenu from "./DropDownMenu";
+
 export function Header() {
   const navItems = [
     {
       label: "Đặt trước",
-      href: "#",
+      href: "/user/preorder",
+      requiresAuth: true,
     },
     {
       label: "Làm kính theo yêu cầu",
-      href: "#",
+      href: "/custom-glasses",
+      requiresAuth: false,
     },
     {
       label: "Kiểm tra thị lực",
-      href: "#",
+      href: "/vision-test",
+      requiresAuth: false,
     },
   ];
 
   const { user, isAuthenticated } = useSelector((state) => state.auth);
+  const { totalProduct } = useSelector((state) => state.cart);
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
-  const { cart, totalProduct } = useSelector((state) => state.cart);
 
   const [dropDownMenu, setDropDownMenu] = useState(false);
 
@@ -42,11 +45,20 @@ export function Header() {
     navigate("/");
   }
 
+  function handleNavigateItem(item) {
+    if (item.requiresAuth && !isAuthenticated) {
+      toast.warning("Vui lòng đăng nhập để tiếp tục!");
+      navigate("/auth/login");
+      return;
+    }
+
+    navigate(item.href);
+  }
+
   return (
-    <header className="sticky top-0 z-50 w-full bg-linear-to-br  from-teal-50 via-white to-blue-50 overflow-hidden">
+    <header className="sticky top-0 z-50 w-full bg-linear-to-br from-teal-50 via-white to-blue-50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="flex items-center justify-between h-20">
-          {/* Logo */}
           <div className="shrink-0 flex items-center gap-2 cursor-pointer">
             <Link to="/" className="flex items-center gap-2">
               <div className="bg-teal-600 p-2 rounded-lg">
@@ -57,7 +69,7 @@ export function Header() {
               </span>
             </Link>
           </div>
-          {/* Desktop Search */}
+
           <div className="hidden lg:flex flex-1 max-w-lg mx-8">
             <div className="relative w-full group">
               <input
@@ -68,13 +80,7 @@ export function Header() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
             </div>
           </div>
-          {/* <DesktopActions
-            isAuthenticated={isAuthenticated}
-            user={user}
-            handleLogout={handleLogout}
-          /> */}
 
-          {/* Desktop Actions */}
           <div className="hidden lg:flex items-center gap-4">
             <div className="flex items-center gap-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors px-3 py-2 rounded-md hover:bg-gray-50">
               <User className="h-5 w-5" />
@@ -89,9 +95,7 @@ export function Header() {
                       Xin chào, {user.fullName}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {user.role === "CUSTOMER"
-                        ? "Khách hàng"
-                        : "Quản trị viên"}
+                      {user.role === "CUSTOMER" ? "Khách hàng" : "Quản trị viên"}
                     </span>
                     <DropDownMenu
                       openMenu={dropDownMenu}
@@ -124,19 +128,11 @@ export function Header() {
           </div>
         </div>
 
-        {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center justify-between gap-8 py-3">
           {navItems.map((item) => (
             <button
               key={item.label}
-              onClick={() => {
-                if (!isAuthenticated) {
-                  toast.warning("Vui lòng đăng nhập để tiếp tục!");
-                  navigate("/auth/login");
-                } else {
-                  navigate(item.href);
-                }
-              }}
+              onClick={() => handleNavigateItem(item)}
               className="text-3xl font-sans font-medium text-gray-700 hover:text-teal-600 transition-colors relative group cursor-pointer"
             >
               {item.label}
