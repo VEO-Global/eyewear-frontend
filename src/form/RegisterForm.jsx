@@ -1,18 +1,57 @@
 import { Button, Form, Input } from "antd";
 import { useForm } from "antd/es/form/Form";
-import { Mail, Phone, User } from "lucide-react";
-import React, { useEffect } from "react";
+import { Mail, Phone, User, Lock } from "lucide-react";
+import React, { useEffect, forwardRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { registerUser } from "../redux/auth/authSlice";
 import { toast } from "react-toastify";
+
+const CustomInput = forwardRef((props, ref) => {
+  const { id, value, onChange, onBlur, icon, isPassword, placeholder, type } =
+    props;
+
+  return (
+    <div className="flex h-11 rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-teal-500 bg-white">
+      <div className="w-1/5 flex shrink-0 items-center justify-center bg-gray-50 text-gray-400 border-r border-gray-100">
+        {icon}
+      </div>
+      <div className="w-4/5">
+        {isPassword ? (
+          <Input.Password
+            id={id}
+            ref={ref}
+            value={value || ""}
+            onChange={onChange}
+            onBlur={onBlur}
+            bordered={false}
+            placeholder={placeholder}
+            className="w-full h-full px-4"
+          />
+        ) : (
+          <Input
+            id={id}
+            ref={ref}
+            type={type}
+            value={value || ""}
+            onChange={onChange}
+            onBlur={onBlur}
+            bordered={false}
+            placeholder={placeholder}
+            className="w-full h-full px-4 bg-transparent"
+          />
+        )}
+      </div>
+    </div>
+  );
+});
 
 export default function RegisterForm() {
   const [form] = useForm();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { notificationMessage, notificationType } = useSelector(
-    (state) => state.auth
+    (state) => state.auth,
   );
 
   function onSubmitForm(values) {
@@ -21,11 +60,15 @@ export default function RegisterForm() {
 
   useEffect(() => {
     if (notificationType === "success") {
-      toast.success(notificationMessage);
+      toast.success(notificationMessage || "Đăng ký thành công!");
       navigate("/auth/login");
     }
     if (notificationType === "error") {
-      toast.error("Email này đã tồn tại");
+      toast.error(
+        typeof notificationMessage === "string"
+          ? notificationMessage
+          : "Đăng ký thất bại!",
+      );
     }
   }, [notificationMessage, notificationType, navigate]);
 
@@ -37,25 +80,12 @@ export default function RegisterForm() {
         className="mt-10 space-y-6"
         onFinish={onSubmitForm}
       >
-        {/* Họ tên */}
         <Form.Item
           name="fullName"
           label="Họ và tên"
           rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
         >
-          <div
-            className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
-                              focus-within:ring-2 focus-within:ring-teal-500"
-          >
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
-              <User />
-            </div>
-            <Input
-              placeholder="Nguyễn Văn A"
-              bordered={false}
-              className="w-4/5 px-4"
-            />
-          </div>
+          <CustomInput icon={<User />} placeholder="Nguyễn Văn A" />
         </Form.Item>
 
         <Form.Item
@@ -69,50 +99,27 @@ export default function RegisterForm() {
             },
           ]}
         >
-          <div
-            className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
-                focus-within:ring-2 focus-within:ring-teal-500"
-          >
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
-              <Phone />
-            </div>
-            <Input
-              placeholder="0987654321"
-              bordered={false}
-              className="w-4/5 px-4"
-            />
-          </div>
+          <CustomInput icon={<Phone />} placeholder="0987654321" />
         </Form.Item>
 
-        {/* Email */}
         <Form.Item
           name="email"
           label="Email"
           rules={[
             { required: true, message: "Vui lòng nhập email" },
-            { type: "email", message: "" },
             {
               pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
               message: "Email sai định dạng",
             },
           ]}
         >
-          <div
-            className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
-                              focus-within:ring-2 focus-within:ring-teal-500"
-          >
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
-              <Mail />
-            </div>
-            <Input
-              placeholder="you@example.com"
-              variant={false}
-              className="w-4/5 px-4"
-            />
-          </div>
+          <CustomInput
+            icon={<Mail />}
+            type="email"
+            placeholder="you@example.com"
+          />
         </Form.Item>
 
-        {/* Mật khẩu */}
         <Form.Item
           name="password"
           label="Mật khẩu"
@@ -121,30 +128,18 @@ export default function RegisterForm() {
             {
               pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&]).{8,}$/,
               message:
-                "Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa, 1 số, 1 ký tự đặc biệt và không chứa dấu !",
+                "Mật khẩu tối thiểu 8 ký tự, có chữ hoa, số và ký tự đặc biệt",
             },
           ]}
         >
-          <div
-            className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
-                              focus-within:ring-2 focus-within:ring-teal-500"
-          >
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
-              <Lock />
-            </div>
-            <Input.Password
-              placeholder="••••••••"
-              bordered={false}
-              className="w-4/5 px-4"
-            />
-          </div>
+          <CustomInput icon={<Lock />} isPassword placeholder="••••••••" />
         </Form.Item>
 
-        {/* Xác nhận mật khẩu */}
         <Form.Item
           name="confirmPassword"
           label="Xác nhận mật khẩu"
           dependencies={["password"]}
+          hasFeedback
           rules={[
             { required: true, message: "Vui lòng xác nhận mật khẩu" },
             ({ getFieldValue }) => ({
@@ -153,36 +148,22 @@ export default function RegisterForm() {
                   return Promise.resolve();
                 }
                 return Promise.reject(
-                  new Error("Mật khẩu xác nhận không khớp")
+                  new Error("Mật khẩu xác nhận không khớp"),
                 );
               },
             }),
           ]}
         >
-          <div
-            className="flex h-11 rounded-lg border border-gray-300 overflow-hidden
-                              focus-within:ring-2 focus-within:ring-teal-500"
-          >
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
-              <Lock />
-            </div>
-            <Input.Password
-              placeholder="••••••••"
-              variant={false}
-              className="w-4/5 px-4"
-            />
-          </div>
+          <CustomInput icon={<Lock />} isPassword placeholder="••••••••" />
         </Form.Item>
 
-        {/* Số điện thoại */}
-
-        {/* Submit */}
         <Form.Item>
           <Button
             htmlType="submit"
             className="w-full flex items-center justify-center gap-2"
             style={{
               backgroundColor: "black",
+              color: "white",
               height: "44px",
             }}
           >
@@ -190,7 +171,6 @@ export default function RegisterForm() {
           </Button>
         </Form.Item>
 
-        {/* Login link */}
         <p className="text-center text-sm text-gray-500">
           Đã có tài khoản?{" "}
           <Link
