@@ -1,13 +1,11 @@
 import { toast } from "react-toastify";
 import api from "../configs/config-axios";
-import { useSelector } from "react-redux";
 import { Button, Form, Input, InputNumber, Select } from "antd";
 import { useForm } from "antd/es/form/Form";
 import AddressSelector from "../components/checkout/AddressSelector";
 
-export default function PreorderForm() {
+export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
-  const { selectedProduct } = useSelector((state) => state.products);
   const currentVariant = selectedProduct?.variants?.[0];
 
   const handleSubmit = async (values) => {
@@ -39,6 +37,12 @@ export default function PreorderForm() {
 
   return (
     <div className="max-w-3xl mx-auto py-10">
+      {!selectedProduct && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          Hãy chọn một sản phẩm ở cột bên trái trước khi điền form đặt trước.
+        </div>
+      )}
+
       <Form
         form={form}
         layout="vertical"
