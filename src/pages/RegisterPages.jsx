@@ -1,8 +1,8 @@
 import video from "../assets/video/advertise-video.mp4";
 
 import { Link } from "react-router-dom";
+import RegisterForm from "../form/auth/RegisterForm";
 
-import RegisterForm from "../form/RegisterForm";
 export default function RegisterPage() {
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
