@@ -1,11 +1,19 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState } from "react";
-import { Search, ShoppingCart, Menu, X, Glasses, User } from "lucide-react";
+import {
+  Search,
+  ShoppingCart,
+  Menu,
+  X,
+  Glasses,
+  User,
+  LayoutDashboard,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import { logout } from "../../redux/auth/authSlice";
-import { Tooltip } from "antd";
+import { Button, Tooltip } from "antd";
 import DropDownMenu from "./DropDownMenu";
 export function Header() {
   const navItems = [
@@ -107,43 +115,56 @@ export function Header() {
               )}
             </div>
 
-            <Tooltip
-              title="Xem tất cả sản phẩm trong giỏ hàng"
-              onClick={() => navigate("/user/cart")}
-            >
-              <div className="relative p-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors">
-                <ShoppingCart className="h-6 w-6" />
+            {user?.role === "CUSTOMER" && (
+              <Tooltip
+                title="Xem tất cả sản phẩm trong giỏ hàng"
+                onClick={() => navigate("/user/cart")}
+              >
+                <div className="relative p-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors">
+                  <ShoppingCart className="h-6 w-6" />
 
-                {totalProduct > 0 && (
-                  <span className="absolute top-0 right-0 h-5 w-5 bg-amber-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
-                    {totalProduct}
-                  </span>
-                )}
-              </div>
-            </Tooltip>
+                  {totalProduct > 0 && (
+                    <span className="absolute top-0 right-0 h-5 w-5 bg-amber-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
+                      {totalProduct}
+                    </span>
+                  )}
+                </div>
+              </Tooltip>
+            )}
+
+            {user?.role === "ADMIN" && (
+              <Button
+                icon={<LayoutDashboard />}
+                onClick={() => navigate("/admin/dashboard")}
+              >
+                Tổng quan
+              </Button>
+            )}
           </div>
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center justify-between gap-8 py-3">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => {
-                if (!isAuthenticated) {
-                  toast.warning("Vui lòng đăng nhập để tiếp tục!");
-                  navigate("/auth/login");
-                } else {
-                  navigate(item.href);
-                }
-              }}
-              className="text-3xl font-sans font-medium text-gray-700 hover:text-teal-600 transition-colors relative group cursor-pointer"
-            >
-              {item.label}
-              <span className="absolute inset-x-0 -bottom-3 h-0.5 bg-teal-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left" />
-            </button>
-          ))}
-        </nav>
+        {user?.role != "ADMIN" && (
+          <nav className="hidden lg:flex items-center justify-between gap-8 py-3">
+            {navItems.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    toast.warning("Vui lòng đăng nhập để tiếp tục!");
+                    navigate("/auth/login");
+                  } else {
+                    navigate(item.href);
+                  }
+                }}
+                className="text-3xl font-sans font-medium text-gray-700 hover:text-teal-600 transition-colors relative group cursor-pointer"
+              >
+                {item.label}
+                <span className="absolute inset-x-0 -bottom-3 h-0.5 bg-teal-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left" />
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
   );
