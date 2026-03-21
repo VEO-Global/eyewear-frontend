@@ -6,7 +6,7 @@ export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
 
   return (
     <div
-      className="relative  mt-10 w-52 bg-white border rounded-xl shadow-lg py-2  z-[999]"
+      className="abs right-0 mt-2 w-52 bg-white border rounded-xl shadow-lg py-2 z-50"
       onMouseLeave={() => setOpenMenu(false)}
     >
       <Link
@@ -19,7 +19,7 @@ export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
 
       <button
         onClick={handleLogout}
-        className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-500"
+        className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm hover:bg-red-50 cursor-pointer"
       >
         <LogOut className="w-4 h-4" />
         Đăng xuất
