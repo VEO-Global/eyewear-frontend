@@ -1,35 +1,15 @@
-import React from "react";
-import "@google/model-viewer";
-
-const Model3dViewer = ({ src, poster, height = "500px" }) => {
-  if (!src) return null; // Không có link thì không hiện gì cả
-
+export default function Product3DViewer({ modelUrl, className }) {
   return (
     <div
-      className={`w-full bg-gray-50 rounded-xl overflow-hidden relative`}
-      style={{ height: height }}
+      className={`flex items-center justify-center h-full w-full ${className || ""}`}
     >
       <model-viewer
-        src={src}
-        poster={poster || "https://via.placeholder.com/400x300?text=Loading..."}
-        alt="Mô hình kính 3D"
-        loading="eager"
-        camera-controls
+        src={modelUrl}
+        alt="3D Model"
         auto-rotate
-        shadow-intensity="1"
-        ar
-        crossOrigin="anonymous"
+        camera-controls
         style={{ width: "100%", height: "100%" }}
-      >
-        <div
-          slot="poster"
-          className="flex items-center justify-center w-full h-full text-gray-400"
-        >
-          <span className="animate-pulse">Đang tải 3D...</span>
-        </div>
-      </model-viewer>
+      />
     </div>
   );
-};
-
-export default Model3dViewer;
+}
