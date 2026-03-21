@@ -11,12 +11,15 @@ import {
 } from "lucide-react";
 import { Button, Tooltip } from "antd";
 import { NavLink, useNavigate } from "react-router-dom";
-import { updateQuantity } from "../../redux/cart/cartSlice";
+import { removeItem, updateQuantity } from "../../redux/cart/cartSlice";
+import { toast } from "react-toastify";
+import Product3DViewer from "../common/Model3dViewer";
 
 export default function CartItems() {
   const { cart, totalProduct } = useSelector((state) => state.cart);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  console.log(cart);
 
   function handleUpdateQuantity(variantId, type) {
     dispatch(
@@ -25,6 +28,11 @@ export default function CartItems() {
         type,
       })
     );
+  }
+
+  function removeProductFromCart(productID) {
+    dispatch(removeItem(productID));
+    toast.success("Xóa sản phẩm khỏi giỏ hàng thành công");
   }
   return (
     <div className="w-full">
@@ -47,14 +55,14 @@ export default function CartItems() {
               onClick={() => navigate(`/products/${item.productID}`)}
             >
               {/* Product Image */}
-              <div className="flex-shrink-0">
-                <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-xs">
-                  No Image
+              <div className="shrink-0">
+                <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-xs bg-amber-100">
+                  <Product3DViewer modelUrl={item.imgUrl}></Product3DViewer>
                 </div>
               </div>
 
               {/* Product Details */}
-              <div className="flex-grow min-w-0">
+              <div className="grow min-w-0">
                 <h3 className="text-lg font-semibold text-foreground truncate">
                   {item.name}
                 </h3>
@@ -73,7 +81,7 @@ export default function CartItems() {
                   </p>
 
                   <p className="text-sm text-muted-foreground">
-                    Giói tính:{" "}
+                    Giới tính:{" "}
                     <span className="font-medium text-foreground">
                       {item.gender === "Male" ? "Nam" : "Nữ"}
                     </span>
@@ -129,6 +137,7 @@ export default function CartItems() {
                     aria-label="Remove item"
                     onClick={(e) => {
                       e.stopPropagation();
+                      removeProductFromCart(item.productID);
                     }}
                   >
                     <Trash2 className="h-5 w-5 text-white" />
