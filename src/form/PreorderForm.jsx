@@ -6,6 +6,7 @@ import AddressSelector from "../components/checkout/AddressSelector";
 
 export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
+  const orderType = Form.useWatch("orderType", form);
   const currentVariant = selectedProduct?.variants?.[0];
 
   const handleSubmit = async (values) => {
@@ -26,13 +27,25 @@ export default function PreorderForm({ selectedProduct }) {
           quantity: values.quantity,
         },
       ],
-      prescription: {
-        description: values.prescription,
-      },
     };
+
+    if (values.orderType === "PREORDER_PRESCRIPTION") {
+      requestBody.prescription = {
+        description: values.prescription,
+      };
+    }
 
     await api.post("/orders", requestBody);
     toast.success("Đặt trước thành công!");
+    form.setFieldsValue({
+      orderType: values.orderType,
+      quantity: 1,
+      receiverName: undefined,
+      phoneNumber: undefined,
+      shippingAddress: undefined,
+      note: undefined,
+      prescription: undefined,
+    });
   };
 
   return (
@@ -48,7 +61,7 @@ export default function PreorderForm({ selectedProduct }) {
         layout="vertical"
         onFinish={handleSubmit}
         initialValues={{
-          orderType: "PREORDER",
+          orderType: "PREORDER_NORMAL",
           quantity: 1,
         }}
       >
@@ -58,15 +71,19 @@ export default function PreorderForm({ selectedProduct }) {
           rules={[{ required: true }]}
         >
           <Select>
-            <Select.Option value="PREORDER">Preorder</Select.Option>
-            <Select.Option value="NORMAL">Normal Order</Select.Option>
+            <Select.Option value="PREORDER_PRESCRIPTION">
+              Preorder Prescription
+            </Select.Option>
+            <Select.Option value="PREORDER_NORMAL">
+              Preorder Normal
+            </Select.Option>
           </Select>
         </Form.Item>
 
         <Form.Item
-          label="Tên người nhận"
+          label="Họ và tên"
           name="receiverName"
-          rules={[{ required: true, message: "Nhập tên người nhận" }]}
+          rules={[{ required: true, message: "Nhập họ và tên" }]}
         >
           <Input />
         </Form.Item>
@@ -95,9 +112,15 @@ export default function PreorderForm({ selectedProduct }) {
           <Input.TextArea rows={3} />
         </Form.Item>
 
-        <Form.Item label="Đơn thuốc" name="prescription">
-          <Input.TextArea rows={3} placeholder="Ví dụ: cận 2 độ..." />
-        </Form.Item>
+        {orderType === "PREORDER_PRESCRIPTION" && (
+          <Form.Item
+            label="Đơn thuốc"
+            name="prescription"
+            rules={[{ required: true, message: "Nhập thông tin đơn thuốc" }]}
+          >
+            <Input.TextArea rows={3} placeholder="Ví dụ: cận 2 độ..." />
+          </Form.Item>
+        )}
 
         <Form.Item>
           <Button type="primary" htmlType="submit" disabled={!currentVariant}>

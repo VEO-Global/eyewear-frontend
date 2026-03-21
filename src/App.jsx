@@ -1,15 +1,18 @@
+import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import AppRouter from "./router/AppRouter";
-
 import { fetchProfile } from "./redux/auth/authSlice";
 
 function App() {
   const dispatch = useDispatch();
-  const token = localStorage.getItem("token");
 
-  if (token) {
-    dispatch(fetchProfile());
-  }
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      dispatch(fetchProfile());
+    }
+  }, [dispatch]);
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900">

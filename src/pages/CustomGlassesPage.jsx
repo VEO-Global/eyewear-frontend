@@ -1,6 +1,14 @@
 import { Form, Input, Select, Button, Checkbox } from "antd";
+import { toast } from "react-toastify";
 
 export default function CustomGlassesPage() {
+  const [form] = Form.useForm();
+
+  function handleSubmit() {
+    toast.success("Yêu cầu làm kính đã được xác nhận");
+    form.resetFields();
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-teal-50 px-4 py-12">
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -39,7 +47,12 @@ export default function CustomGlassesPage() {
             Gửi yêu cầu của bạn
           </h2>
 
-          <Form layout="vertical" initialValues={{ lensType: "Cận" }}>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            initialValues={{ lensType: "Cận" }}
+          >
             <Form.Item
               label="Họ và tên"
               name="fullName"
@@ -51,6 +64,11 @@ export default function CustomGlassesPage() {
             <Form.Item
               label="Số điện thoại"
               name="phoneNumber"
+              extra={
+                <span className="text-xs text-gray-500">
+                  Nhập số điện thoại (Có sử dụng Zalo)
+                </span>
+              }
               rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
             >
               <Input placeholder="Nhập số điện thoại" />

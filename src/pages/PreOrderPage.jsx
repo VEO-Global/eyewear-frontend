@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import PreorderForm from "../form/PreorderForm";
-import { fetchProductById, fetchProducts } from "../redux/products/producSlice";
+import {
+  clearSelectedProduct,
+  fetchProductById,
+  fetchProducts,
+} from "../redux/products/producSlice";
 
 export default function PreorderPage() {
   const dispatch = useDispatch();
+  const location = useLocation();
   const { products, selectedProduct, loading } = useSelector(
     (state) => state.products
   );
@@ -20,6 +26,13 @@ export default function PreorderPage() {
       dispatch(fetchProducts());
     }
   }, [dispatch, products.length]);
+
+  useEffect(() => {
+    if (!location.state?.preserveSelection) {
+      dispatch(clearSelectedProduct());
+      setShowProductDetail(false);
+    }
+  }, [dispatch, location.key, location.state?.preserveSelection]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -115,7 +128,10 @@ export default function PreorderPage() {
       <div className="max-w-md w-full flex flex-col gap-6">
         <button
           type="button"
-          onClick={() => setShowProductDetail(false)}
+          onClick={() => {
+            dispatch(clearSelectedProduct());
+            setShowProductDetail(false);
+          }}
           className="inline-flex w-fit items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-teal-500 hover:text-teal-600"
         >
           <ArrowLeft className="h-4 w-4" />

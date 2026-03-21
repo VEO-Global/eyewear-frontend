@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
+import { logout } from "../auth/authSlice";
 
 const initialState = {
   products: [],
@@ -37,6 +38,9 @@ const productSlice = createSlice({
   name: "products",
   initialState,
   reducers: {
+    clearSelectedProduct(state) {
+      state.selectedProduct = null;
+    },
     decreaseVariantStock(state, action) {
       const { productId, variantId, amount = 1 } = action.payload;
 
@@ -92,10 +96,13 @@ const productSlice = createSlice({
       .addCase(fetchProductById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(logout, (state) => {
+        state.selectedProduct = null;
       });
   },
 });
 
-export const { decreaseVariantStock } = productSlice.actions;
+export const { clearSelectedProduct, decreaseVariantStock } = productSlice.actions;
 
 export default productSlice.reducer;

@@ -72,7 +72,9 @@ export default function ProductDetail() {
 
   function handleNavigateToPreoder(product) {
     dispatch(fetchProductById(product.id));
-    navigate("/user/preorder");
+    navigate("/user/preorder", {
+      state: { preserveSelection: true },
+    });
   }
 
   function handleSelectProductVariant(size) {
