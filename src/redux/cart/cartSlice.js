@@ -33,16 +33,16 @@ const cartSlice = createSlice({
     },
 
     removeItem(state, action) {
-      const variantId = action.payload;
+      const productID = action.payload;
 
-      const item = state.cart.find((i) => i.variantId === variantId);
+      const item = state.cart.find((i) => i.productID === productID);
 
       if (item) {
         state.totalProduct -= item.quantity;
         state.totalPrice -= item.price * item.quantity;
       }
 
-      state.cart = state.cart.filter((item) => item.variantId !== variantId);
+      state.cart = state.cart.filter((item) => item.productID !== productID);
     },
 
     updateQuantity(state, action) {

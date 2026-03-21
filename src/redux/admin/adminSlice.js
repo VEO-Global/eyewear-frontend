@@ -1,10 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
-
-const API_URL = "http://localhost:8080/api/users";
+import api from "../../configs/config-axios";
 
 const initialState = {
   totalUser: [],
+  selectedUser: null,
   loading: false,
   error: null,
 };
@@ -12,17 +11,22 @@ const initialState = {
 // 🔥 GET ALL USERS
 export const fetchUsers = createAsyncThunk("admin/fetchUsers", async (_, { rejectWithValue }) => {
   try {
-    const res = await axios.get(API_URL);
-    return res.data;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await api.get("/user");
+    console.log(response.data);
+
+    return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data || "Lỗi lấy user");
   }
 });
 
 // 🔥 CREATE USER
-export const createUser = createAsyncThunk("admin/createUser", async (data, { rejectWithValue }) => {
+export const createUser = createAsyncThunk("admin/createUser", async (values, { rejectWithValue }) => {
+  console.log(values);
+
   try {
-    const res = await axios.post(API_URL, data);
+    const res = await api.post(`/user`, values);
     return res.data;
   } catch (err) {
     return rejectWithValue(err.response?.data);
@@ -32,8 +36,8 @@ export const createUser = createAsyncThunk("admin/createUser", async (data, { re
 // 🔥 UPDATE USER
 export const updateUser = createAsyncThunk("admin/updateUser", async ({ id, data }, { rejectWithValue }) => {
   try {
-    const res = await axios.put(`${API_URL}/${id}`, data);
-    return res.data;
+    const response = await api.post(`/user/${(Number(id), data)}`);
+    return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data);
   }
@@ -42,8 +46,8 @@ export const updateUser = createAsyncThunk("admin/updateUser", async ({ id, data
 // 🔥 DELETE USER
 export const deleteUser = createAsyncThunk("admin/deleteUser", async (id, { rejectWithValue }) => {
   try {
-    await axios.delete(`${API_URL}/${id}`);
-    return id;
+    const response = api.delete(`/user/${Number(id)}`);
+    return response.data;
   } catch (err) {
     return rejectWithValue(err.response?.data);
   }
@@ -52,7 +56,11 @@ export const deleteUser = createAsyncThunk("admin/deleteUser", async (id, { reje
 const adminSlice = createSlice({
   name: "admin",
   initialState,
-  reducers: {},
+  reducers: {
+    setSelectedUser: (state, action) => {
+      state.selectedUser = state.totalUser.find((u) => u.id === action.payload);
+    },
+  },
 
   extraReducers: (builder) => {
     builder
@@ -89,5 +97,5 @@ const adminSlice = createSlice({
       });
   },
 });
-
+export const { setSelectedUser, clearSelectedUser } = adminSlice.actions;
 export default adminSlice.reducer;

@@ -11,6 +11,7 @@ const initialState = {
 export const fetchProducts = createAsyncThunk("products/fetch", async (_, { rejectWithValue }) => {
   try {
     const response = await api.get("/products");
+
     return response.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || "Không thể lấy danh sách sản phẩm");
@@ -20,14 +21,7 @@ export const fetchProducts = createAsyncThunk("products/fetch", async (_, { reje
 export const fetchProductById = createAsyncThunk("products/fetchById", async (id, { rejectWithValue }) => {
   try {
     const response = await api.get(`/products/${Number(id)}`);
-    const variants = await api.get(`/variants/product/${Number(id)}`);
-
-    const productDetail = {
-      ...response.data,
-      variants: variants.data,
-    };
-
-    return productDetail;
+    return response.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || "Không thể lấy sản phẩm");
   }
