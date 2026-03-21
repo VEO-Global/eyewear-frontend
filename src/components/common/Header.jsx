@@ -21,7 +21,7 @@ export function Header() {
       requiresAuth: false,
     },
     {
-      label: "Kiểm tra thị lực",
+      label: "Kiểm tra thị lực sơ bộ",
       href: "/vision-test",
       requiresAuth: false,
     },
@@ -53,6 +53,16 @@ export function Header() {
     }
 
     navigate(item.href);
+  }
+
+  function handleCartClick() {
+    if (!isAuthenticated) {
+      toast.warning("Vui lòng đăng nhập để tiếp tục!");
+      navigate("/auth/login");
+      return;
+    }
+
+    navigate("/user/cart");
   }
 
   return (
@@ -91,9 +101,7 @@ export function Header() {
                     className="flex flex-col leading-tight"
                     onClick={() => toogleDropDownMeni(dropDownMenu)}
                   >
-                    <span className="text-sm font-medium">
-                      Xin chào, {user.fullName}
-                    </span>
+                    <span className="text-sm font-medium">Xin chào, {user.fullName}</span>
                     <span className="text-xs text-gray-500">
                       {user.role === "CUSTOMER" ? "Khách hàng" : "Quản trị viên"}
                     </span>
@@ -113,7 +121,7 @@ export function Header() {
 
             <Tooltip
               title="Xem tất cả sản phẩm trong giỏ hàng"
-              onClick={() => navigate("/user/cart")}
+              onClick={handleCartClick}
             >
               <div className="relative p-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors">
                 <ShoppingCart className="h-6 w-6" />
