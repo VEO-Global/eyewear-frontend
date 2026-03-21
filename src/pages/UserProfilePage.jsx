@@ -2,7 +2,6 @@ import { UserCircle, CheckCircle } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LoadingIndicator } from "../components/common/application/loading-indicator/loading-indicator";
 import { Loading } from "../components/common/Loading";
 
 export default function UserProfilePage() {
