@@ -1,23 +1,34 @@
 import React from "react";
-import { ArrowRight, Calendar, Settings } from "lucide-react";
+import { ArrowRight, Calendar } from "lucide-react";
 import { Button } from "../common/Button";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { useSelector } from "react-redux";
 
 export function HeroSection() {
   const navigate = useNavigate();
-
+  const { isAuthenticated } = useSelector((state) => state.auth);
   function handleNavigate() {
     navigate("/products");
   }
+
+  function handleNavigatePreorder() {
+    if (isAuthenticated) {
+      navigate("/user/preorder");
+      return;
+    }
+
+    toast.warning("Vui lòng đăng nhập để đặt trước");
+    navigate("/auth/login");
+  }
+
   return (
     <section className="relative bg-gradient-to-br from-teal-50 via-white to-amber-50 overflow-hidden">
-      {/* Background Decorative Elements */}
       <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-teal-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
       <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-amber-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Content */}
           <div className="space-y-8 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-sm font-medium">
               <span className="relative flex h-2 w-2">
@@ -33,14 +44,13 @@ export function HeroSection() {
             </h1>
 
             <p className="text-lg text-gray-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Mua kính nhanh chóng – Đặt trước tiện lợi – Cá nhân hóa theo nhu
-              cầu. Trải nghiệm dịch vụ chăm sóc mắt chuyên nghiệp và tận tâm
-              nhất.
+              Mua kính nhanh chóng, đặt trước tiện lợi và cá nhân hóa theo nhu
+              cầu. Trải nghiệm dịch vụ chăm sóc mắt chuyên nghiệp và tận tâm.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
               <Button
-                onClick={() => handleNavigate()}
+                onClick={handleNavigate}
                 size="lg"
                 className="shadow-lg shadow-teal-200/50 cursor-pointer"
               >
@@ -49,7 +59,8 @@ export function HeroSection() {
               <Button
                 variant="secondary"
                 size="lg"
-                className="shadow-lg shadow-amber-200/50  cursor-pointer"
+                className="shadow-lg shadow-amber-200/50 cursor-pointer"
+                onClick={handleNavigatePreorder}
               >
                 <Calendar className="mr-2 h-5 w-5" /> Đặt trước
               </Button>
@@ -71,10 +82,8 @@ export function HeroSection() {
             </div>
           </div>
 
-          {/* Image/Visual */}
           <div className="relative lg:h-[600px] flex items-center justify-center">
             <div className="relative w-full max-w-lg aspect-square">
-              {/* Abstract shapes representing glasses/vision */}
               <div className="absolute inset-0 bg-gradient-to-tr from-teal-200 to-amber-200 rounded-full opacity-20 animate-pulse" />
               <div className="absolute inset-4 bg-white/40 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/50 flex items-center justify-center overflow-hidden">
                 <img
@@ -84,7 +93,6 @@ export function HeroSection() {
                 />
               </div>
 
-              {/* Floating Cards */}
               <div className="absolute -left-8 top-1/4 bg-white p-4 rounded-xl shadow-xl border border-gray-100 animate-bounce duration-[3000ms]">
                 <div className="flex items-center gap-3">
                   <div className="bg-green-100 p-2 rounded-lg">

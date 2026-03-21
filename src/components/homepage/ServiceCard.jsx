@@ -1,6 +1,10 @@
 import React from "react";
 import { Clock, Eye, Glasses, PenTool } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
 export function ServiceCards() {
+  const navigate = useNavigate();
+
   const services = [
     {
       icon: Glasses,
@@ -9,6 +13,7 @@ export function ServiceCards() {
         "Hàng trăm mẫu kính thời trang, giao nhanh trong 2h nội thành.",
       color: "bg-blue-50 text-blue-600",
       hoverBorder: "hover:border-blue-200",
+      href: "/products",
     },
     {
       icon: Clock,
@@ -17,22 +22,28 @@ export function ServiceCards() {
         "Giữ chỗ mẫu kính hot, phiên bản giới hạn, không lo hết hàng.",
       color: "bg-amber-50 text-amber-600",
       hoverBorder: "hover:border-amber-200",
+      href: "/user/preorder",
     },
     {
       icon: PenTool,
-      title: "Làm kính theo nhu cầu",
-      description: "Chọn độ, tròng, gọng và lớp phủ theo đúng đôi mắt của bạn.",
+      title: "Làm kính theo yêu cầu",
+      description:
+        "Chọn độ, tròng, gọng và lớp phủ theo đúng đôi mắt của bạn.",
       color: "bg-teal-50 text-teal-600",
       hoverBorder: "hover:border-teal-200",
+      href: "/custom-glasses",
     },
     {
       icon: Eye,
       title: "Kiểm tra thị lực online",
-      description: "Bài test sơ bộ giúp bạn nhận biết tình trạng sức khỏe mắt.",
+      description:
+        "Bài test sơ bộ giúp bạn nhận biết tình trạng sức khỏe mắt.",
       color: "bg-purple-50 text-purple-600",
       hoverBorder: "hover:border-purple-200",
+      href: "/vision-test",
     },
   ];
+
   return (
     <section className="py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,9 +59,11 @@ export function ServiceCards() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {services.map((service, index) => (
-            <div
+            <button
               key={index}
-              className={`group p-8 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer ${service.hoverBorder}`}
+              type="button"
+              onClick={() => navigate(service.href)}
+              className={`group p-8 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer text-left ${service.hoverBorder}`}
             >
               <div
                 className={`w-14 h-14 rounded-xl flex items-center justify-center mb-6 ${service.color} transition-transform group-hover:scale-110 duration-300`}
@@ -63,7 +76,7 @@ export function ServiceCards() {
               <p className="text-gray-600 leading-relaxed">
                 {service.description}
               </p>
-            </div>
+            </button>
           ))}
         </div>
       </div>

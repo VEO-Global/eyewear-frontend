@@ -2,7 +2,13 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
-import { fetchProductById } from "../redux/products/producSlice";
+import { ArrowBigLeft, Heart, ShoppingCart } from "lucide-react";
+import { toast } from "react-toastify";
+import {
+  decreaseVariantStock,
+  fetchProductById,
+} from "../redux/products/producSlice";
+import { addItem } from "../redux/cart/cartSlice";
 import { ProductGallery } from "../components/productdetail/ProductGallery";
 import { ProductInfo } from "../components/productdetail/ProductInfor";
 import { VariantSelector } from "../components/productdetail/VariantSelector";
@@ -22,14 +28,13 @@ export default function ProductDetail() {
   const [selectedSize, setSelectedSize] = useState("");
 
   const currentVariant = selectedProduct?.variants?.find(
-    (v) => v.size === selectedSize
+    (variant) => variant.size === selectedSize
   );
 
   useEffect(() => {
     dispatch(fetchProductById(id));
   }, [dispatch, id]);
 
-  // set default variant
   useEffect(() => {
     if (selectedProduct?.variants?.length) {
       setSelectedColor(selectedProduct.variants[0]?.color);
@@ -37,18 +42,18 @@ export default function ProductDetail() {
     }
   }, [selectedProduct]);
 
-  // useEffect(() => {
-  //   if (currentVariant?.stockQuantity === 0) {
-  //     toast.warning("Sản phẩm này đã hết hàng");
-  //   }
-  // }, [currentVariant]);
-
   function handleAddToCart(product) {
+    if (!currentVariant || currentVariant.stockQuantity <= 0) {
+      toast.warning("Sản phẩm này đã hết hàng");
+      return;
+    }
+
     dispatch(
       addItem({
         productID: product.id,
         variantID: currentVariant.id,
         variantPrice: currentVariant.price,
+        color: currentVariant.color || selectedColor,
         name: product.name,
         brand: product.brand,
         description: product.description,
@@ -58,6 +63,14 @@ export default function ProductDetail() {
         quantity: currentVariant.stockQuantity,
       })
     );
+
+    dispatch(
+      decreaseVariantStock({
+        productId: product.id,
+        variantId: currentVariant.id,
+      })
+    );
+
     toast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
   }
 
@@ -66,22 +79,19 @@ export default function ProductDetail() {
     navigate("/user/preorder");
   }
 
+  function handleSelectProductVariant(size) {
+    setSelectedSize(size);
+  }
+
   if (loading || !selectedProduct) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        {/* Spinner */}
         <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-
-        {/* Message */}
         <p className="text-muted-foreground text-lg">
           Đang tải thông tin sản phẩm...
         </p>
       </div>
     );
-  }
-
-  function handleSelectProductVariant(size) {
-    setSelectedSize(size);
   }
 
   return (
@@ -96,13 +106,13 @@ export default function ProductDetail() {
           <ArrowBigLeft className="w-5 h-5" />
           <span>Quay lại</span>
         </NavLink>
+
         <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
           {/* Left Column - Gallery */}
           <div className="w-full lg:w-5/5 flex flex-col gap-6 bg-amber-100">
             <Product3DViewer modelUrl={selectedProduct.model3dUrl} />
           </div>
 
-          {/* Right Column - Product Details */}
           <div className="w-full lg:w-2/5 flex flex-col">
             <div className="sticky top-32">
               <ProductInfo
@@ -114,6 +124,7 @@ export default function ProductDetail() {
                 createdAt={selectedProduct.createdAt}
                 gender={selectedProduct.gender}
               />
+
               <VariantSelector
                 variants={selectedProduct.variants}
                 selectedColor={selectedColor}
@@ -142,7 +153,7 @@ export default function ProductDetail() {
                   >
                     <ShoppingCart className="w-4 h-4 text-white" />
                     <span className="font-medium text-white">
-                      Thêm sản phầm vào giỏ hàng
+                      Thêm sản phẩm vào giỏ hàng
                     </span>
                   </Button>
                 )}

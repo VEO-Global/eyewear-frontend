@@ -30,7 +30,34 @@ export const fetchProductById = createAsyncThunk("products/fetchById", async (id
 const productSlice = createSlice({
   name: "products",
   initialState,
-  reducers: {},
+  reducers: {
+    decreaseVariantStock(state, action) {
+      const { productId, variantId, amount = 1 } = action.payload;
+
+      const updateVariants = (product) => {
+        if (!product?.variants?.length || Number(product.id) !== Number(productId)) {
+          return product;
+        }
+
+        return {
+          ...product,
+          variants: product.variants.map((variant) => {
+            if (Number(variant.id) !== Number(variantId)) {
+              return variant;
+            }
+
+            return {
+              ...variant,
+              stockQuantity: Math.max(0, (variant.stockQuantity || 0) - amount),
+            };
+          }),
+        };
+      };
+
+      state.selectedProduct = updateVariants(state.selectedProduct);
+      state.products = state.products.map(updateVariants);
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchProducts.pending, (state) => {
@@ -62,5 +89,7 @@ const productSlice = createSlice({
       });
   },
 });
+
+export const { decreaseVariantStock } = productSlice.actions;
 
 export default productSlice.reducer;
