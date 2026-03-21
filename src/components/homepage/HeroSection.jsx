@@ -2,19 +2,12 @@ import React from "react";
 import { ArrowRight, Calendar, Settings } from "lucide-react";
 import { Button } from "../common/Button";
 import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { toast } from "react-toastify";
+
 export function HeroSection() {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
 
   function handleNavigate() {
-    {
-      isAuthenticated
-        ? navigate("/products")
-        : (toast.warning("Vui lòng đăng nhập để tiếp tục"),
-          navigate("/auth/login"));
-    }
+    navigate("/products");
   }
   return (
     <section className="relative bg-gradient-to-br from-teal-50 via-white to-amber-50 overflow-hidden">
