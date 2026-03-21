@@ -69,7 +69,10 @@ function AnimatedRoutes() {
             />
 
             {/* User Route */}
-            <Route path="/user/profile" element={<UserProfilePage />}></Route>
+            <Route
+              path="/user/profile/:id"
+              element={<UserProfilePage />}
+            ></Route>
             <Route path="/user/cart" element={<CartPage />}></Route>
             <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
             <Route path="/user/preorder" element={<PreOrderPage />} />
