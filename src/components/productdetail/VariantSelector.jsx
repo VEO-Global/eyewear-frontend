@@ -39,7 +39,7 @@ export function VariantSelector({
                   onClick={() => onSizeChange(size)}
                   className={`cursor-pointer rounded-lg border px-6 py-3 text-sm font-medium transition-all ${
                     selectedSize === size
-                      ? "bg-black text-white"
+                      ? "border-slate-900 bg-slate-100 text-slate-900 shadow-sm"
                       : "border-gray-300 bg-white text-black hover:border-black"
                   }`}
                 >

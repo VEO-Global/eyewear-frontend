@@ -2,6 +2,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
 
+const PROFILE_ADDRESS_STORAGE_KEY = "profile-address-by-user";
+
 const initialState = {
   user: null,
   isAuthenticated: false,
@@ -35,6 +37,78 @@ function getErrorMessage(error, fallbackMessage) {
   }
 
   return fallbackMessage;
+}
+
+function readStoredProfileAddresses() {
+  try {
+    const storedValue = localStorage.getItem(PROFILE_ADDRESS_STORAGE_KEY);
+
+    if (!storedValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(storedValue);
+    return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredProfileAddresses(addressMap) {
+  try {
+    localStorage.setItem(PROFILE_ADDRESS_STORAGE_KEY, JSON.stringify(addressMap));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function persistStructuredAddress(userId, payload) {
+  if (!userId || !payload || typeof payload !== "object") {
+    return;
+  }
+
+  const hasStructuredAddress =
+    payload.provinceName || payload.districtName || payload.wardName || payload.addressDetail;
+
+  if (!hasStructuredAddress) {
+    return;
+  }
+
+  const currentAddressMap = readStoredProfileAddresses();
+  currentAddressMap[String(userId)] = {
+    provinceCode: payload.provinceCode,
+    provinceName: payload.provinceName,
+    districtCode: payload.districtCode,
+    districtName: payload.districtName,
+    wardCode: payload.wardCode,
+    wardName: payload.wardName,
+    addressDetail: payload.addressDetail,
+    isLatest: true,
+    updatedAt: new Date().toISOString(),
+  };
+  writeStoredProfileAddresses(currentAddressMap);
+}
+
+function mergeStoredAddress(profile) {
+  if (!profile?.id) {
+    return profile;
+  }
+
+  const currentAddressMap = readStoredProfileAddresses();
+  const storedAddress = currentAddressMap[String(profile.id)];
+
+  if (!storedAddress) {
+    return profile;
+  }
+
+  return {
+    ...profile,
+    addressDetail: profile.addressDetail ?? storedAddress.addressDetail,
+    province: profile.province ?? storedAddress.provinceName,
+    district: profile.district ?? storedAddress.districtName,
+    ward: profile.ward ?? storedAddress.wardName,
+    latestShippingAddress: profile.latestShippingAddress || storedAddress,
+  };
 }
 
 async function persistProfileUpdate(id, payload) {
@@ -148,6 +222,7 @@ export const updateProfile = createAsyncThunk(
         wardName: data.wardName,
       };
 
+      persistStructuredAddress(id, payload);
       const updatedProfile = await persistProfileUpdate(id, payload);
       return mergeSubmittedAddress(updatedProfile, payload);
     } catch (error) {
@@ -205,7 +280,7 @@ const authSlice = createSlice({
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
+        state.user = mergeStoredAddress(action.payload);
         state.isAuthenticated = true;
       })
       .addCase(fetchProfile.rejected, (state, action) => {

@@ -17,6 +17,16 @@ export default function CartItems() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const selectableItems = cart.filter((item) => !item.isPreorder || item.isPreorderReady);
+  const sortedCart = [...cart].sort((left, right) => {
+    const leftLocked = left.isPreorder && !left.isPreorderReady;
+    const rightLocked = right.isPreorder && !right.isPreorderReady;
+
+    if (leftLocked === rightLocked) {
+      return 0;
+    }
+
+    return leftLocked ? 1 : -1;
+  });
   const isAllSelected =
     selectableItems.length > 0 && selectedVariantIds.length === selectableItems.length;
 
@@ -58,7 +68,7 @@ export default function CartItems() {
       </div>
 
       <div className="space-y-6">
-        {cart.map((item) => {
+        {sortedCart.map((item) => {
           const isLockedPreorder = item.isPreorder && !item.isPreorderReady;
 
           return (
@@ -75,7 +85,7 @@ export default function CartItems() {
                   <Tooltip
                     title={
                       isLockedPreorder
-                        ? "Hàng đặt trước chỉ được tick khi manager cập nhật là đã có hàng"
+                        ? "Hàng đặt trước chỉ được tick khi nhân viên cập nhật là đã có hàng"
                         : "Chọn sản phẩm để thanh toán"
                     }
                   >
@@ -123,6 +133,12 @@ export default function CartItems() {
                       Hãng: <span className="font-medium text-foreground">{item.brand}</span>
                     </p>
                     <p className="text-sm text-muted-foreground">
+                      Kích thước:{" "}
+                      <span className="font-medium text-foreground">
+                        {item.size || "Chưa cập nhật"}
+                      </span>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
                       Nguyên liệu:{" "}
                       <span className="font-medium text-foreground">{item.material}</span>
                     </p>
@@ -140,7 +156,7 @@ export default function CartItems() {
                     </p>
                     {isLockedPreorder ? (
                       <p className="pt-2 text-sm font-medium text-amber-700">
-                        Sản phẩm đang chờ manager xác nhận đã có hàng, tạm thời chưa thể chọn để
+                        Sản phẩm đang chờ nhân viên xác nhận đã có hàng, tạm thời chưa thể chọn để
                         thanh toán.
                       </p>
                     ) : null}

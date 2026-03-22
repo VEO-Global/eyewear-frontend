@@ -3,7 +3,6 @@ import { Button, Form, Input, InputNumber, Select } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import api from "../configs/config-axios";
 import AddressSelector from "../components/checkout/AddressSelector";
 import { fetchProfile } from "../redux/auth/authSlice";
 import { addItem } from "../redux/cart/cartSlice";
@@ -37,28 +36,6 @@ const validateShippingAddress = (_, value) => {
   return Promise.resolve();
 };
 
-function buildPreorderRequestBody(values, currentVariant) {
-  const selectedAddress = values.shippingAddress || {};
-  const note = values.note?.trim();
-
-  return {
-    orderType: "PREORDER_NORMAL",
-    receiverName: values.receiverName?.trim() || "",
-    phoneNumber: values.phoneNumber?.trim() || "",
-    province: selectedAddress.provinceName?.trim() || "",
-    district: selectedAddress.districtName?.trim() || "",
-    ward: selectedAddress.wardName?.trim() || "",
-    addressDetail: selectedAddress.addressDetail?.trim() || "",
-    ...(note ? { note } : {}),
-    items: [
-      {
-        variantId: Number(currentVariant.id),
-        quantity: Math.max(1, Number(values.quantity) || 1),
-      },
-    ],
-  };
-}
-
 export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
   const dispatch = useDispatch();
@@ -68,6 +45,7 @@ export default function PreorderForm({ selectedProduct }) {
   const [selectedSize, setSelectedSize] = useState("");
 
   const variants = selectedProduct?.variants || [];
+
   const colorOptions = useMemo(
     () =>
       [...new Set(variants.map((variant) => variant.color).filter(Boolean))].map(
@@ -173,52 +151,38 @@ export default function PreorderForm({ selectedProduct }) {
       return;
     }
 
-    const requestBody = buildPreorderRequestBody(values, currentVariant);
+    dispatch(
+      addItem({
+        productID: selectedProduct.id,
+        variantID: currentVariant.id,
+        variantPrice: currentVariant.price,
+        color: currentVariant.color || selectedColor,
+        size: currentVariant.size || selectedSize,
+        name: selectedProduct.name,
+        brand: selectedProduct.brand,
+        description: selectedProduct.description,
+        material: selectedProduct.material,
+        imgUrl: selectedProduct.imageUrl || selectedProduct.image,
+        gender: selectedProduct.gender,
+        cartQuantity: Math.max(1, Number(values.quantity) || 1),
+        isPreorder: true,
+        isPreorderReady: false,
+      })
+    );
 
-    try {
-      await api.post("/orders", requestBody);
+    dispatch(fetchProfile());
 
-      dispatch(
-        addItem({
-          productID: selectedProduct.id,
-          variantID: currentVariant.id,
-          variantPrice: currentVariant.price,
-          color: currentVariant.color || selectedColor,
-          size: currentVariant.size || selectedSize,
-          name: selectedProduct.name,
-          brand: selectedProduct.brand,
-          description: selectedProduct.description,
-          material: selectedProduct.material,
-          imgUrl: selectedProduct.imageUrl || selectedProduct.image,
-          gender: selectedProduct.gender,
-          cartQuantity: Math.max(1, Number(values.quantity) || 1),
-          isPreorder: true,
-          isPreorderReady: false,
-        })
-      );
+    appToast.success("Đã thêm sản phẩm đặt trước vào giỏ hàng");
 
-      dispatch(fetchProfile());
+    form.setFieldsValue({
+      quantity: 1,
+      receiverName: undefined,
+      phoneNumber: undefined,
+      shippingAddress: undefined,
+      note: undefined,
+    });
 
-      appToast.success("Đặt trước thành công và đã thêm sản phẩm vào giỏ hàng");
-
-      form.setFieldsValue({
-        quantity: 1,
-        receiverName: undefined,
-        phoneNumber: undefined,
-        shippingAddress: undefined,
-        note: undefined,
-      });
-
-      navigate("/user/cart");
-    } catch (error) {
-      const responseData = error.response?.data;
-      const errorMessage =
-        (typeof responseData === "string" && responseData) ||
-        responseData?.message ||
-        "Không thể xác nhận đặt trước lúc này.";
-
-      appToast.error(errorMessage);
-    }
+    navigate("/user/cart");
   }
 
   return (
@@ -337,7 +301,7 @@ export default function PreorderForm({ selectedProduct }) {
         <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-500">
             {currentVariant
-              ? "Khi xác nhận đặt trước, sản phẩm cũng sẽ được thêm vào giỏ hàng của bạn."
+              ? "Khi xác nhận đặt trước, sản phẩm sẽ được thêm vào giỏ hàng của bạn."
               : "Chọn một sản phẩm cùng màu và size trước để tiếp tục."}
           </p>
 

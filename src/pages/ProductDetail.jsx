@@ -5,6 +5,7 @@ import { ArrowBigLeft, Heart, ShoppingCart } from "lucide-react";
 import { appToast } from "../utils/appToast";
 import { fetchProductById } from "../redux/products/producSlice";
 import { addItem } from "../redux/cart/cartSlice";
+import { toggleFavorite } from "../redux/favorites/favoriteSlice";
 import { ProductGallery } from "../components/productdetail/ProductGallery";
 import { ProductInfo } from "../components/productdetail/ProductInfor";
 import { VariantSelector } from "../components/productdetail/VariantSelector";
@@ -17,10 +18,15 @@ export default function ProductDetail() {
   const navigate = useNavigate();
 
   const { selectedProduct, loading } = useSelector((state) => state.products);
+  const user = useSelector((state) => state.auth.user);
+  const favoriteItems = useSelector((state) => state.favorites.items);
 
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
   const isPreorder = isPreorderProduct(selectedProduct);
+  const isFavorite = favoriteItems.some(
+    (item) => Number(item.id) === Number(selectedProduct?.id)
+  );
 
   const currentVariant = selectedProduct?.variants?.find(
     (variant) =>
@@ -79,6 +85,24 @@ export default function ProductDetail() {
 
   function handleSelectProductVariant(size) {
     setSelectedSize(size);
+  }
+
+  function handleToggleFavorite() {
+    if (!selectedProduct) {
+      return;
+    }
+
+    if (!user?.id) {
+      appToast.warning("Vui lòng đăng nhập để lưu sản phẩm yêu thích.");
+      return;
+    }
+
+    dispatch(toggleFavorite(selectedProduct));
+    appToast.success(
+      isFavorite
+        ? "Đã xóa sản phẩm khỏi danh sách yêu thích."
+        : "Đã lưu sản phẩm vào danh sách yêu thích."
+    );
   }
 
   if (loading || !selectedProduct) {
@@ -168,8 +192,21 @@ export default function ProductDetail() {
                   </Button>
                 )}
 
-                <Button size="sm" variant="danger">
-                  <Heart className="h-4 w-4 text-white" />
+                <Button
+                  size="sm"
+                  type="button"
+                  variant={isFavorite ? "danger" : "outline"}
+                  className={
+                    isFavorite
+                      ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
+                      : "border-slate-300 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+                  }
+                  onClick={handleToggleFavorite}
+                >
+                  <Heart
+                    className="h-4 w-4"
+                    fill={isFavorite ? "currentColor" : "none"}
+                  />
                 </Button>
               </div>
             </div>

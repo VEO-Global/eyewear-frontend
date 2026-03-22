@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { UserCircle, CheckCircle, Phone, ShieldCheck } from "lucide-react";
+import {
+  UserCircle,
+  CheckCircle,
+  Phone,
+  ShieldCheck,
+  Heart,
+  ShoppingCart,
+  EyeIcon,
+} from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import AddressSelector from "../components/checkout/AddressSelector";
 import { appToast } from "../utils/appToast";
 import { fetchProfile, updateProfile } from "../redux/auth/authSlice";
+import { fetchProductById } from "../redux/products/producSlice";
+import { toggleFavorite } from "../redux/favorites/favoriteSlice";
 import {
   extractLatestCheckoutAddress,
   formatCheckoutAddress,
 } from "../utils/userAddress";
+import { isPreorderProduct } from "../utils/productCatalog";
 
 const emptyShippingAddress = {
   provinceCode: undefined,
@@ -55,7 +67,9 @@ function isValidShippingAddress(address) {
 
 export default function UserProfilePage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user, loading } = useSelector((state) => state.auth);
+  const favoriteItems = useSelector((state) => state.favorites.items);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -97,6 +111,24 @@ export default function UserProfilePage() {
   function handleCancel() {
     setFormData(buildProfileFormState(user));
     setIsEditing(false);
+  }
+
+  function handleOpenFavoriteProduct(product) {
+    dispatch(fetchProductById(product.id));
+
+    if (isPreorderProduct(product)) {
+      navigate("/user/preorder", {
+        state: { preserveSelection: true },
+      });
+      return;
+    }
+
+    navigate(`/products/${product.id}`);
+  }
+
+  function handleRemoveFavorite(product) {
+    dispatch(toggleFavorite(product));
+    appToast.success("Đã xóa sản phẩm khỏi danh sách yêu thích.");
   }
 
   async function handleSubmit(event) {
@@ -313,6 +345,102 @@ export default function UserProfilePage() {
                 </div>
               )}
             </form>
+          </div>
+
+          <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                  Sản phẩm bạn đã yêu thích
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                  Danh sách này lưu các mẫu kính bạn đã bấm tim để quay lại xem nhanh sau này.
+                </p>
+              </div>
+
+              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600">
+                <Heart size={16} fill="currentColor" />
+                {favoriteItems.length} sản phẩm
+              </span>
+            </div>
+
+            {favoriteItems.length > 0 ? (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {favoriteItems.map((product) => {
+                  const isPreorder = isPreorderProduct(product);
+
+                  return (
+                    <div
+                      key={product.id}
+                      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                    >
+                      <div
+                        className="relative h-48 cursor-pointer overflow-hidden bg-slate-100"
+                        onClick={() => handleOpenFavoriteProduct(product)}
+                      >
+                        <img
+                          src={product.imageUrl || product.image || "/placeholder.jpg"}
+                          alt={product.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRemoveFavorite(product);
+                          }}
+                          className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-rose-500 shadow-sm transition hover:bg-white"
+                        >
+                          <Heart size={18} fill="currentColor" />
+                        </button>
+                        {isPreorder ? (
+                          <span className="absolute left-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+                            Đặt trước
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-4 p-5">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            {product.brand || "EyeCare"}
+                          </p>
+                          <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-slate-900">
+                            {product.name}
+                          </h3>
+                          <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
+                            {product.description || "Sản phẩm bạn đã đánh dấu yêu thích."}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-xl font-bold text-slate-900">
+                            {Number(product.basePrice || 0).toLocaleString("vi-VN")}đ
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFavoriteProduct(product)}
+                            className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+                          >
+                            {isPreorder ? (
+                              <ShoppingCart size={16} />
+                            ) : (
+                              <EyeIcon size={16} />
+                            )}
+                            {isPreorder ? "Đặt trước" : "Xem chi tiết"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">
+                Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu lại.
+              </div>
+            )}
           </div>
         </div>
       </div>

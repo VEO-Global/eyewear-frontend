@@ -1,15 +1,20 @@
 import { EyeIcon, Heart, ShoppingCart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Button } from "./Button";
 import { fetchProductById } from "../../redux/products/producSlice";
 import { getProductAvailability, isPreorderProduct } from "../../utils/productCatalog";
+import { toggleFavorite } from "../../redux/favorites/favoriteSlice";
+import { appToast } from "../../utils/appToast";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const user = useSelector((state) => state.auth.user);
+  const favoriteItems = useSelector((state) => state.favorites.items);
   const isPreorder = isPreorderProduct(product);
   const availability = getProductAvailability(product);
+  const isFavorite = favoriteItems.some((item) => Number(item.id) === Number(product.id));
 
   function openProductDetail() {
     dispatch(fetchProductById(product.id));
@@ -27,6 +32,20 @@ export function ProductCard({ product }) {
     }
 
     navigate(`/products/${product.id}`);
+  }
+
+  function handleToggleFavorite() {
+    if (!user?.id) {
+      appToast.warning("Vui lòng đăng nhập để lưu sản phẩm yêu thích.");
+      return;
+    }
+
+    dispatch(toggleFavorite(product));
+    appToast.success(
+      isFavorite
+        ? "Đã xóa sản phẩm khỏi danh sách yêu thích."
+        : "Đã lưu sản phẩm vào danh sách yêu thích."
+    );
   }
 
   return (
@@ -92,8 +111,21 @@ export function ProductCard({ product }) {
             </span>
           </Button>
 
-          <Button size="sm" variant="danger">
-            <Heart className="h-4 w-4 text-white" />
+          <Button
+            size="sm"
+            type="button"
+            variant={isFavorite ? "danger" : "outline"}
+            className={
+              isFavorite
+                ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
+                : "border-slate-300 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+            }
+            onClick={handleToggleFavorite}
+          >
+            <Heart
+              className="h-4 w-4"
+              fill={isFavorite ? "currentColor" : "none"}
+            />
           </Button>
         </div>
       </div>
