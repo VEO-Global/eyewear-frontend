@@ -64,7 +64,7 @@ const orderTabContent = {
   [ORDER_STATUS.RETURN_REFUND]: {
     title: "Trả hàng/Hoàn tiền",
     description:
-      "Những đơn đang trong quá trình trả hàng hoặc hoàn tiền sẽ được theo dõi tại đây.",
+      "Những đơn đã hủy hoặc đang trong quá trình trả hàng, hoàn tiền sẽ được theo dõi tại đây.",
     icon: RotateCcw,
   },
 };
@@ -176,21 +176,31 @@ function filterOrdersByTab(orders, activeTab) {
   }
 
   if (activeTab === ORDER_STATUS.RETURN_REFUND) {
-    return orders.filter((order) => order.phase === ORDER_PHASE.RETURN_REFUND);
+    return orders.filter((order) =>
+      [ORDER_PHASE.CANCELED, ORDER_PHASE.RETURN_REFUND].includes(order.phase)
+    );
   }
 
   return orders;
 }
 
-function StatusPanel({ order, badge, onCancel }) {
+function StatusPanel({
+  order,
+  badge,
+  activeTab,
+  isConfirming,
+  onOpenCancel,
+  onConfirmCancel,
+  onCloseCancel,
+}) {
   return (
-    <div className="w-full shrink-0 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-4 pb-4 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.96)] lg:w-[272px]">
+    <div className="relative w-full shrink-0 rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-5 pb-5 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.96)] lg:w-[290px]">
       <div className="space-y-4">
         <div className="text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
             Trạng thái hiện tại
           </p>
-          <div className="mt-1.5">
+          <div className="mt-2">
             <span
               className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold shadow-sm ${badge.className}`}
             >
@@ -199,26 +209,56 @@ function StatusPanel({ order, badge, onCancel }) {
           </div>
         </div>
 
-        <div className="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+        <div className="rounded-[22px] border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
             Tổng thanh toán
           </p>
-          <p className="mt-2.5 text-[2rem] font-bold tracking-tight text-slate-900">
+          <p className="mt-3 text-[2rem] font-bold tracking-tight text-slate-900">
             {formatCurrency(order.totalAmount)}
           </p>
         </div>
       </div>
 
-      <div className="pt-6">
-        {order.canCancel ? (
+      <div className="pt-5">
+        {isConfirming ? (
+          <div className="rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,#fff5f5_0%,#ffe9ec_100%)] p-4 shadow-[0_18px_36px_rgba(244,63,94,0.14)]">
+            <p className="text-base font-semibold text-slate-900">
+              Bạn xác nhận hủy đơn này?
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Sau khi hủy, đơn hàng sẽ không tiếp tục xử lý nữa.
+            </p>
+            <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
+              Để hoàn tiền cho sản phẩm vui lòng xem ở phần Trả hàng/hoàn tiền để
+              hoàn thành việc hoàn tiền.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                onClick={() => onConfirmCancel(order)}
+                className="inline-flex w-full items-center justify-center rounded-[18px] bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-rose-600"
+              >
+                Xác nhận hủy đơn
+              </button>
+              <button
+                type="button"
+                onClick={onCloseCancel}
+                className="inline-flex w-full items-center justify-center rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                Giữ lại đơn
+              </button>
+            </div>
+          </div>
+        ) : order.canCancel ? (
           <button
             type="button"
-            onClick={() => onCancel(order)}
+            onClick={() => onOpenCancel(order)}
             className="inline-flex w-full items-center justify-center rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-100"
           >
             Hủy đơn
           </button>
-        ) : order.phase === ORDER_PHASE.CANCELED ? (
+        ) : order.phase === ORDER_PHASE.CANCELED &&
+          activeTab !== ORDER_STATUS.RETURN_REFUND ? (
           <div className="rounded-[20px] border border-rose-200 bg-[linear-gradient(180deg,#fff1f2_0%,#ffe4e6_100%)] px-4 py-3 text-sm font-medium text-rose-700">
             Đơn đã được hủy.
           </div>
@@ -232,16 +272,39 @@ function StatusPanel({ order, badge, onCancel }) {
   );
 }
 
-function OrderCard({ order, now, onCancel }) {
+function OrderCard({
+  order,
+  now,
+  activeTab,
+  isConfirming,
+  isMuted,
+  onOpenCancel,
+  onConfirmCancel,
+  onCloseCancel,
+}) {
   const firstItem = order.items?.[0];
-  const badge = phaseBadgeMap[order.phase] || phaseBadgeMap[ORDER_PHASE.PENDING_CONFIRMATION];
+  const badge =
+    activeTab === ORDER_STATUS.RETURN_REFUND && order.phase === ORDER_PHASE.CANCELED
+      ? {
+          label: "Đang chờ hoàn tiền",
+          className: "border-amber-200 bg-amber-50 text-amber-700",
+        }
+      : phaseBadgeMap[order.phase] || phaseBadgeMap[ORDER_PHASE.PENDING_CONFIRMATION];
   const processingRemainingMs =
     order.phase === ORDER_PHASE.PROCESSING && order.processingEndsAt
       ? Math.max(0, order.processingEndsAt - now)
       : 0;
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_56px_rgba(15,23,42,0.12)]">
+    <div
+      className={`rounded-[30px] border bg-white p-6 transition-all duration-300 lg:p-7 ${
+        isConfirming
+          ? "relative z-20 scale-[1.02] border-rose-200 shadow-[0_30px_80px_rgba(15,23,42,0.18)]"
+          : isMuted
+            ? "scale-[0.985] border-slate-200 opacity-35 blur-[1.2px] shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
+            : "border-slate-200 shadow-[0_16px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1 hover:shadow-[0_24px_56px_rgba(15,23,42,0.12)]"
+      }`}
+    >
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 flex-1 gap-5">
           <div className="flex-shrink-0">
@@ -253,7 +316,7 @@ function OrderCard({ order, now, onCancel }) {
               />
             ) : (
               <div className="flex h-24 w-24 items-center justify-center rounded-[20px] border border-slate-200 bg-slate-50 text-xs text-slate-400">
-                No image
+                Không có ảnh
               </div>
             )}
           </div>
@@ -313,7 +376,8 @@ function OrderCard({ order, now, onCancel }) {
 
             {order.phase === ORDER_PHASE.PRESCRIPTION_REVIEW ? (
               <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/80 px-4 py-3 text-sm leading-6 text-violet-800">
-                Đơn hàng này đang chờ nhân viên duyệt đơn thuốc trước khi chuyển sang bước gia công.
+                Đơn hàng này đang chờ nhân viên duyệt đơn thuốc trước khi chuyển sang
+                bước gia công.
               </div>
             ) : null}
 
@@ -376,7 +440,15 @@ function OrderCard({ order, now, onCancel }) {
           </div>
         </div>
 
-        <StatusPanel order={order} badge={badge} onCancel={onCancel} />
+        <StatusPanel
+          order={order}
+          badge={badge}
+          activeTab={activeTab}
+          isConfirming={isConfirming}
+          onOpenCancel={onOpenCancel}
+          onConfirmCancel={onConfirmCancel}
+          onCloseCancel={onCloseCancel}
+        />
       </div>
     </div>
   );
@@ -388,6 +460,7 @@ export default function OrderTrackingPage() {
   const userId = useSelector((state) => state.auth.user?.id);
   const [tick, setTick] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [confirmingOrderId, setConfirmingOrderId] = useState(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -416,6 +489,19 @@ export default function OrderTrackingPage() {
     [activeTab, orders]
   );
 
+  function openCancelConfirmation(order) {
+    if (!order?.canCancel) {
+      appToast.warning("Đơn này đã được xác nhận xử lý nên không thể hủy nữa.");
+      return;
+    }
+
+    setConfirmingOrderId(order.id);
+  }
+
+  function closeCancelConfirmation() {
+    setConfirmingOrderId(null);
+  }
+
   function handleCancelOrder(order) {
     if (!userId || !order?.id) {
       appToast.error("Không thể hủy đơn hàng lúc này.");
@@ -437,9 +523,12 @@ export default function OrderTrackingPage() {
         })
       );
     });
+    setConfirmingOrderId(null);
     setRefreshKey((prev) => prev + 1);
     appToast.success("Đã hủy đơn hàng thành công.");
   }
+
+  const hasActiveConfirmation = Boolean(confirmingOrderId);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(153,246,228,0.28),_transparent_24%),linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] px-4 py-10">
@@ -474,14 +563,24 @@ export default function OrderTrackingPage() {
 
           {filteredOrders.length > 0 ? (
             <div className="mt-6 space-y-6">
-              {filteredOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  now={tick}
-                  onCancel={handleCancelOrder}
-                />
-              ))}
+              {filteredOrders.map((order) => {
+                const isConfirming = confirmingOrderId === order.id;
+                const isMuted = hasActiveConfirmation && !isConfirming;
+
+                return (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    now={tick}
+                    activeTab={activeTab}
+                    isConfirming={isConfirming}
+                    isMuted={isMuted}
+                    onOpenCancel={openCancelConfirmation}
+                    onConfirmCancel={handleCancelOrder}
+                    onCloseCancel={closeCancelConfirmation}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">

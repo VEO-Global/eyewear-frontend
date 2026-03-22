@@ -1,5 +1,4 @@
 import React, { useEffect } from "react";
-/* eslint-disable no-unused-vars */
 import { Key, Mail } from "lucide-react";
 import { Button, Checkbox, Form, Input } from "antd";
 import { Link, useNavigate } from "react-router-dom";
@@ -43,23 +42,10 @@ export default function LoginnForm() {
   }, [isAuthenticated, navigate]);
 
   return (
-    <div
-      className="bg-white/80 backdrop-blur
-  rounded-2xl
-  p-10
-  shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]"
-    >
-      <Form
-        layout="vertical"
-        className="mt-10 space-y-6"
-        onFinish={handleLogin}
-      >
+    <div className="rounded-2xl bg-white/80 p-10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur">
+      <Form layout="vertical" className="mt-10 space-y-6" onFinish={handleLogin}>
         <Form.Item
-          label={
-            <span className="text-lg font-medium text-gray-900">
-              Email của bạn
-            </span>
-          }
+          label={<span className="text-lg font-medium text-gray-900">Email của bạn</span>}
           name="email"
           rules={[
             { required: true, message: "Vui lòng nhập email" },
@@ -82,9 +68,7 @@ export default function LoginnForm() {
         </Form.Item>
 
         <Form.Item
-          label={
-            <span className="text-lg font-medium text-gray-900">Mật khẩu</span>
-          }
+          label={<span className="text-lg font-medium text-gray-900">Mật khẩu</span>}
           name="password"
           rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
         >
@@ -104,10 +88,7 @@ export default function LoginnForm() {
             <Checkbox className="text-sm">Ghi nhớ đăng nhập</Checkbox>
           </Form.Item>
 
-          <a
-            href="/forgot-password"
-            className="text-sm text-teal-600 hover:underline"
-          >
+          <a href="/forgot-password" className="text-sm text-teal-600 hover:underline">
             Quên mật khẩu?
           </a>
         </div>
@@ -115,7 +96,7 @@ export default function LoginnForm() {
         <Form.Item>
           <Button
             htmlType="submit"
-            className="w-full flex items-center justify-center gap-2"
+            className="flex w-full items-center justify-center gap-2"
             style={{ backgroundColor: "black", height: "44px" }}
           >
             <span className="text-lg font-medium text-white">Đăng nhập →</span>
@@ -127,27 +108,18 @@ export default function LoginnForm() {
             <div className="w-full border-t border-gray-200" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-gray-400">
-              Hoặc tiếp tục với
-            </span>
+            <span className="bg-background px-2 text-gray-400">Hoặc tiếp tục với</span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Button className="h-11 rounded-lg border border-gray-300">
-            Google
-          </Button>
-          <Button className="h-11 rounded-lg border border-gray-300">
-            GitHub
-          </Button>
+          <Button className="h-11 rounded-lg border border-gray-300">Google</Button>
+          <Button className="h-11 rounded-lg border border-gray-300">GitHub</Button>
         </div>
 
         <p className="text-center text-sm text-gray-500">
           Chưa có tài khoản?{" "}
-          <Link
-            to="/auth/register"
-            className="font-medium text-teal-600 hover:underline"
-          >
+          <Link to="/auth/register" className="font-medium text-teal-600 hover:underline">
             Tạo tài khoản mới
           </Link>
         </p>
