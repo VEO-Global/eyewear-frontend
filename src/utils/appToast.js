@@ -1,16 +1,21 @@
 import { toast } from "react-toastify";
 import store from "../redux/store";
-import { addNotification } from "../redux/notification/notificationSlice";
+import {
+  addNotification,
+  normalizeNotificationMessage,
+} from "../redux/notification/notificationSlice";
 
 function pushToast(type, message, options) {
+  const normalizedMessage = normalizeNotificationMessage(message);
+
   store.dispatch(
     addNotification({
       type,
-      message,
+      message: normalizedMessage,
     })
   );
 
-  toast[type](message, options);
+  toast[type](normalizedMessage, options);
 }
 
 export const appToast = {

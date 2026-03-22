@@ -1,31 +1,52 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { ChevronDown, Info, RotateCcw } from "lucide-react";
 
-export default function FilterBar({ products = [] }) {
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
+export default function FilterBar({
+  products = [],
+  categories = [],
+  totalCount,
+  selectedCategory = "",
+  selectedStatus = "",
+  onCategoryChange,
+  onStatusChange,
+  onReset,
+  refreshing = false,
+}) {
+  const categoryOptions = useMemo(() => {
+    if (categories.length) {
+      return categories
+        .map((item) => ({
+          value: String(item.id ?? item.code ?? item.name ?? ""),
+          label: item.name ?? "",
+        }))
+        .filter((item) => item.value && item.label);
+    }
 
-  const categories = useMemo(
-    () => [...new Set(products.map((item) => item.category).filter(Boolean))],
-    [products]
-  );
+    return [...new Set(products
+      .map((item) => {
+        if (typeof item.category === "string") {
+          return item.category;
+        }
+
+        if (item.category && typeof item.category === "object") {
+          return item.category.name || item.category.categoryName || "";
+        }
+
+        return item.categoryName || "";
+      })
+      .filter(Boolean))].map((item) => ({
+      value: item,
+      label: item,
+    }));
+  }, [categories, products]);
+
   const statuses = useMemo(
-    () => [...new Set(products.map((item) => item.status).filter(Boolean))],
-    [products]
+    () => [
+      { value: "in_stock", label: "Còn hàng" },
+      { value: "out_of_stock", label: "Hết hàng" },
+    ],
+    []
   );
-
-  function onCategoryChange(category) {
-    setSelectedCategory(category);
-  }
-
-  function onStatusChange(status) {
-    setSelectedStatus(status);
-  }
-
-  function onReset() {
-    setSelectedCategory("");
-    setSelectedStatus("");
-  }
 
   return (
     <div className="mb-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -45,7 +66,8 @@ export default function FilterBar({ products = [] }) {
             <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
           </svg>
           <span className="px-2 font-medium text-gray-500">
-            Tổng <span className="font-bold text-teal-600">{products.length}</span> sản phẩm
+            Tổng <span className="font-bold text-teal-600">{totalCount ?? products.length}</span>{" "}
+            sản phẩm
           </span>
         </div>
 
@@ -53,13 +75,13 @@ export default function FilterBar({ products = [] }) {
           <div className="relative">
             <select
               value={selectedCategory}
-              onChange={(e) => onCategoryChange(e.target.value)}
+              onChange={(e) => onCategoryChange?.(e.target.value)}
               className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 pr-8 text-gray-700 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500 sm:w-48"
             >
               <option value="">Loại kính</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              {categoryOptions.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
                 </option>
               ))}
             </select>
@@ -72,13 +94,13 @@ export default function FilterBar({ products = [] }) {
           <div className="relative">
             <select
               value={selectedStatus}
-              onChange={(e) => onStatusChange(e.target.value)}
+              onChange={(e) => onStatusChange?.(e.target.value)}
               className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 pr-8 text-gray-700 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500 sm:w-48"
             >
               <option value="">Trạng thái</option>
               {statuses.map((status) => (
-                <option key={status} value={status}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                <option key={status.value} value={status.value}>
+                  {status.label}
                 </option>
               ))}
             </select>
@@ -91,9 +113,12 @@ export default function FilterBar({ products = [] }) {
 
           <button
             onClick={onReset}
-            className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-zinc-900/10 transition-all duration-300 hover:bg-zinc-800 hover:shadow-zinc-900/20"
+            disabled={refreshing}
+            className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-zinc-900/10 transition-all duration-300 hover:bg-zinc-800 hover:shadow-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <span className="text-white">Làm mới</span>
+            <span className="text-white">
+              {refreshing ? "Đang tải..." : "Làm mới"}
+            </span>
             <RotateCcw className="text-white" size={16} />
           </button>
         </div>
