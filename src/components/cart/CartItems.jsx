@@ -39,6 +39,14 @@ export default function CartItems() {
     );
   }
 
+  function handleCardSelect(item) {
+    if (item.isPreorder && !item.isPreorderReady) {
+      return;
+    }
+
+    dispatch(toggleSelectedItem(item.variantID));
+  }
+
   return (
     <div className="w-full">
       <div className="mb-8 flex items-center justify-between gap-4">
@@ -72,32 +80,24 @@ export default function CartItems() {
           const isLockedPreorder = item.isPreorder && !item.isPreorderReady;
 
           return (
-            <Tooltip key={item.variantID} title="Xem chi tiết sản phẩm">
-              <div
-                className={`group flex gap-6 rounded-[20px] border bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.14)] ${
-                  isLockedPreorder
-                    ? "border-amber-200 bg-amber-50/40 hover:shadow-[0_18px_40px_rgba(180,83,9,0.12)]"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-                onClick={() => navigate(`/products/${item.productID}`)}
-                role="button"
-                tabIndex={0}
-              >
+            <div
+              key={item.variantID}
+              className={`group flex gap-6 rounded-[20px] border bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.14)] ${
+                isLockedPreorder
+                  ? "border-amber-200 bg-amber-50/40 hover:shadow-[0_18px_40px_rgba(180,83,9,0.12)]"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+              onClick={() => handleCardSelect(item)}
+              role="button"
+              tabIndex={0}
+            >
                 <div className="pt-1">
-                  <Tooltip
-                    title={
-                      isLockedPreorder
-                        ? "Hàng đặt trước chỉ được tick khi nhân viên cập nhật là đã có hàng"
-                        : "Chọn sản phẩm để thanh toán"
-                    }
-                  >
-                    <Checkbox
-                      checked={selectedVariantIds.includes(item.variantID)}
-                      disabled={isLockedPreorder}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={() => dispatch(toggleSelectedItem(item.variantID))}
-                    />
-                  </Tooltip>
+                  <Checkbox
+                    checked={selectedVariantIds.includes(item.variantID)}
+                    disabled={isLockedPreorder}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => dispatch(toggleSelectedItem(item.variantID))}
+                  />
                 </div>
 
                 <div className="flex-shrink-0">
@@ -116,7 +116,17 @@ export default function CartItems() {
 
                 <div className="min-w-0 flex-grow">
                   <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="truncate text-lg font-semibold text-foreground">{item.name}</h3>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/products/${item.productID}`);
+                      }}
+                      className="truncate text-left text-lg font-semibold text-foreground transition hover:text-teal-700 hover:underline"
+                    >
+                      {item.name}
+                    </button>
+
                     {item.isPreorder ? (
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -125,7 +135,9 @@ export default function CartItems() {
                             : "bg-amber-100 text-amber-700"
                         }`}
                       >
-                        {item.isPreorderReady ? "Hàng đặt trước đã có hàng" : "Hàng đặt trước"}
+                        {item.isPreorderReady
+                          ? "Hàng đặt trước đã có hàng"
+                          : "Hàng đặt trước"}
                       </span>
                     ) : null}
                   </div>
@@ -158,23 +170,23 @@ export default function CartItems() {
                     </p>
                     {isLockedPreorder ? (
                       <p className="pt-2 text-sm font-medium text-amber-700">
-                        Sản phẩm đang chờ nhân viên xác nhận đã có hàng, tạm thời chưa thể chọn để
-                        thanh toán.
+                        Sản phẩm đang chờ nhân viên xác nhận đã có hàng, tạm thời chưa thể
+                        chọn để thanh toán.
                       </p>
                     ) : null}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-lg bg-muted p-2">
+                <div
+                  className="flex items-center gap-3 rounded-lg bg-muted p-2"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <Tooltip title="Giảm số lượng">
                     <button
                       className="cursor-pointer rounded border border-border p-1 transition-colors hover:bg-background"
                       aria-label="Decrease quantity"
                       hidden={item.quantity === 1}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleUpdateQuantity(item.variantID, "-");
-                      }}
+                      onClick={() => handleUpdateQuantity(item.variantID, "-")}
                     >
                       <Minus className="h-4 w-4 text-muted-foreground" />
                     </button>
@@ -188,10 +200,7 @@ export default function CartItems() {
                     <button
                       className="cursor-pointer rounded border border-border p-1 transition-colors hover:bg-background"
                       aria-label="Increase quantity"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleUpdateQuantity(item.variantID, "+");
-                      }}
+                      onClick={() => handleUpdateQuantity(item.variantID, "+")}
                     >
                       <Plus className="h-4 w-4 text-muted-foreground" />
                     </button>
@@ -204,22 +213,18 @@ export default function CartItems() {
                   </div>
                 </div>
 
-                <div className="flex items-center">
+                <div className="flex items-center" onClick={(event) => event.stopPropagation()}>
                   <Tooltip title="Xóa sản phẩm">
                     <button
                       className="cursor-pointer rounded-lg bg-red-500 p-2"
                       aria-label="Remove item"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        dispatch(removeItem(item.variantID));
-                      }}
+                      onClick={() => dispatch(removeItem(item.variantID))}
                     >
                       <Trash2 className="h-5 w-5 text-white" />
                     </button>
                   </Tooltip>
                 </div>
-              </div>
-            </Tooltip>
+            </div>
           );
         })}
       </div>
