@@ -7,11 +7,7 @@ import productReducer, {
 import cartReducer, { getCartStorageKey } from "./cart/cartSlice";
 import categoriesReducer from "./category/categorySlice";
 import adminReducer from "./admin/adminSlice";
-import favoritesReducer, {
-  getFavoritesStorageKey,
-  readStoredFavorites,
-  replaceFavorites as replaceStoredFavorites,
-} from "./favorites/favoriteSlice";
+import favoritesReducer, { fetchFavorites } from "./favorites/favoriteSlice";
 import notificationReducer, {
   getNotificationStorageKey,
   readStoredNotifications,
@@ -38,12 +34,15 @@ store.subscribe(() => {
   const state = store.getState();
   const userId = state.auth.user?.id;
   const notificationStorageKey = getNotificationStorageKey(userId);
-  const favoritesStorageKey = getFavoritesStorageKey(userId);
 
   if (userId !== previousUserId) {
     previousUserId = userId;
     store.dispatch(replaceNotifications(readStoredNotifications(userId)));
-    store.dispatch(replaceStoredFavorites(readStoredFavorites(userId)));
+
+    if (userId) {
+      store.dispatch(fetchFavorites());
+    }
+
     return;
   }
 
@@ -63,8 +62,6 @@ store.subscribe(() => {
     notificationStorageKey,
     JSON.stringify(state.notifications.items)
   );
-
-  localStorage.setItem(favoritesStorageKey, JSON.stringify(state.favorites.items));
 });
 
 export default store;

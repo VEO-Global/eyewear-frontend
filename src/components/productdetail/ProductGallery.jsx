@@ -1,10 +1,15 @@
 /* eslint-disable no-unused-vars */
 import React, { useState } from "react";
 import { ZoomIn } from "lucide-react";
+import { PRODUCT_PLACEHOLDER_IMAGE } from "../../utils/productImages";
 
 export function ProductGallery({ images, selectedImage, onImageSelect }) {
   const [isZoomed, setIsZoomed] = useState(false);
   const [zoomPosition, setZoomPosition] = useState({ x: 0, y: 0 });
+  const galleryImages = Array.isArray(images) && images.length
+    ? images
+    : [PRODUCT_PLACEHOLDER_IMAGE];
+  const activeImage = selectedImage || galleryImages[0] || PRODUCT_PLACEHOLDER_IMAGE;
 
   const handleMouseMove = (e) => {
     if (!isZoomed) return;
@@ -26,7 +31,7 @@ export function ProductGallery({ images, selectedImage, onImageSelect }) {
         onMouseMove={handleMouseMove}
       >
         <img
-          src={selectedImage}
+          src={activeImage}
           alt="Product"
           className={`w-full h-full object-cover transition-transform duration-300 ${
             isZoomed ? "scale-150" : "scale-100"
@@ -46,15 +51,15 @@ export function ProductGallery({ images, selectedImage, onImageSelect }) {
         </div>
       </div>
 
-      {/* Thumbnails */}
-      {/* <div className="flex gap-3 overflow-x-auto pb-2">
-        {images.map((image, index) => (
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {galleryImages.map((image, index) => (
           <button
             key={index}
-            onClick={() => onImageSelect(image)}
+            type="button"
+            onClick={() => onImageSelect?.(image)}
             className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-              selectedImage === image
-                ? "border-black"
+              activeImage === image
+                ? "border-black ring-2 ring-black/10"
                 : "border-gray-200 hover:border-gray-400"
             }`}
           >
@@ -65,7 +70,7 @@ export function ProductGallery({ images, selectedImage, onImageSelect }) {
             />
           </button>
         ))}
-      </div> */}
+      </div>
     </div>
   );
 }

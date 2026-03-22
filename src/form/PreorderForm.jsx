@@ -11,6 +11,7 @@ import {
   extractLatestCheckoutAddress,
   hasCheckoutAddress,
 } from "../utils/userAddress";
+import { getPrimaryProductImage } from "../utils/productImages";
 
 const validateShippingAddress = (_, value) => {
   if (!value || typeof value !== "object") {
@@ -162,7 +163,7 @@ export default function PreorderForm({ selectedProduct }) {
         brand: selectedProduct.brand,
         description: selectedProduct.description,
         material: selectedProduct.material,
-        imgUrl: selectedProduct.imageUrl || selectedProduct.image,
+        imgUrl: getPrimaryProductImage(selectedProduct),
         gender: selectedProduct.gender,
         cartQuantity: Math.max(1, Number(values.quantity) || 1),
         isPreorder: true,

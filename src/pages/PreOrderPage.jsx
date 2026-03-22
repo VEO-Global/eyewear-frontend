@@ -8,6 +8,7 @@ import {
   fetchPreorderProducts,
   fetchProductById,
 } from "../redux/products/producSlice";
+import { getPrimaryProductImage } from "../utils/productImages";
 
 function FeaturePill({ title, description }) {
   return (
@@ -79,7 +80,7 @@ export default function PreorderPage() {
             >
               <div className="relative h-48 overflow-hidden bg-slate-100">
                 <img
-                  src={product.imageUrl || product.image || "/placeholder.png"}
+                  src={getPrimaryProductImage(product)}
                   alt={product.name}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
@@ -158,7 +159,7 @@ export default function PreorderPage() {
         <div className="overflow-hidden rounded-[32px] border border-white/80 bg-white/95 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
           <div className="relative h-80 overflow-hidden bg-slate-100">
             <img
-              src={selectedProduct.imageUrl || selectedProduct.image || "/placeholder.png"}
+              src={getPrimaryProductImage(selectedProduct)}
               alt={selectedProduct.name}
               className="h-full w-full object-cover"
             />

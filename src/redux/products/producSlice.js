@@ -2,6 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
 import { logout } from "../auth/authSlice";
 import { isPreorderProduct, normalizeCatalogType } from "../../utils/productCatalog";
+import { extractProductImages, getPrimaryProductImage } from "../../utils/productImages";
 
 const PRODUCT_STOCK_OVERRIDES_STORAGE_KEY = "product-stock-overrides";
 
@@ -40,6 +41,8 @@ function normalizeProduct(product) {
   return {
     ...product,
     catalogType: normalizedCatalogType,
+    images: extractProductImages(product),
+    imageUrl: getPrimaryProductImage(product),
     variants: Array.isArray(product.variants)
       ? product.variants.map((variant) => ({
           ...variant,

@@ -74,8 +74,10 @@ export default function CartItems() {
           return (
             <Tooltip key={item.variantID} title="Xem chi tiết sản phẩm">
               <div
-                className={`group flex gap-6 rounded-lg bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${
-                  isLockedPreorder ? "border border-amber-200 bg-amber-50/40" : ""
+                className={`group flex gap-6 rounded-[20px] border bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.14)] ${
+                  isLockedPreorder
+                    ? "border-amber-200 bg-amber-50/40 hover:shadow-[0_18px_40px_rgba(180,83,9,0.12)]"
+                    : "border-slate-200 hover:border-slate-300"
                 }`}
                 onClick={() => navigate(`/products/${item.productID}`)}
                 role="button"

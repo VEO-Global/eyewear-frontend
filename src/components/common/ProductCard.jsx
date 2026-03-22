@@ -6,6 +6,7 @@ import { fetchProductById } from "../../redux/products/producSlice";
 import { getProductAvailability, isPreorderProduct } from "../../utils/productCatalog";
 import { toggleFavorite } from "../../redux/favorites/favoriteSlice";
 import { appToast } from "../../utils/appToast";
+import { getPrimaryProductImage } from "../../utils/productImages";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
@@ -34,18 +35,24 @@ export function ProductCard({ product }) {
     navigate(`/products/${product.id}`);
   }
 
-  function handleToggleFavorite() {
+  async function handleToggleFavorite() {
     if (!user?.id) {
       appToast.warning("Vui lòng đăng nhập để lưu sản phẩm yêu thích.");
       return;
     }
 
-    dispatch(toggleFavorite(product));
-    appToast.success(
-      isFavorite
-        ? "Đã xóa sản phẩm khỏi danh sách yêu thích."
-        : "Đã lưu sản phẩm vào danh sách yêu thích."
-    );
+    const result = await dispatch(toggleFavorite(product));
+
+    if (toggleFavorite.fulfilled.match(result)) {
+      appToast.success(
+        isFavorite
+          ? "Đã xóa sản phẩm khỏi danh sách yêu thích."
+          : "Đã lưu sản phẩm vào danh sách yêu thích."
+      );
+      return;
+    }
+
+    appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
   }
 
   return (
@@ -61,7 +68,7 @@ export function ProductCard({ product }) {
         onClick={openProductDetail}
       >
         <img
-          src={product.imageUrl || product.image || "/placeholder.jpg"}
+          src={getPrimaryProductImage(product)}
           alt={product.name}
           className="
             w-full h-full object-cover

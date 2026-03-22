@@ -20,6 +20,7 @@ import {
   formatCheckoutAddress,
 } from "../utils/userAddress";
 import { isPreorderProduct } from "../utils/productCatalog";
+import { getPrimaryProductImage } from "../utils/productImages";
 
 const emptyShippingAddress = {
   provinceCode: undefined,
@@ -126,9 +127,15 @@ export default function UserProfilePage() {
     navigate(`/products/${product.id}`);
   }
 
-  function handleRemoveFavorite(product) {
-    dispatch(toggleFavorite(product));
-    appToast.success("Đã xóa sản phẩm khỏi danh sách yêu thích.");
+  async function handleRemoveFavorite(product) {
+    const result = await dispatch(toggleFavorite(product));
+
+    if (toggleFavorite.fulfilled.match(result)) {
+      appToast.success("Đã xóa sản phẩm khỏi danh sách yêu thích.");
+      return;
+    }
+
+    appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
   }
 
   async function handleSubmit(event) {
@@ -379,7 +386,7 @@ export default function UserProfilePage() {
                         onClick={() => handleOpenFavoriteProduct(product)}
                       >
                         <img
-                          src={product.imageUrl || product.image || "/placeholder.jpg"}
+                          src={getPrimaryProductImage(product)}
                           alt={product.name}
                           className="h-full w-full object-cover"
                         />

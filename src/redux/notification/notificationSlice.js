@@ -19,6 +19,7 @@ const notificationMessageMap = new Map([
   ["network error", "Không thể kết nối tới máy chủ. Vui lòng thử lại sau."],
   ["failed to fetch", "Không thể kết nối tới máy chủ. Vui lòng thử lại sau."],
   ["unauthorized", "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."],
+  ["something went wrong", "Có lỗi xảy ra. Vui lòng thử lại."],
 ]);
 
 export function getNotificationStorageKey(userId) {
