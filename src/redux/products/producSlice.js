@@ -168,6 +168,50 @@ const productSlice = createSlice({
       state.products = state.products.map(updateVariants);
       state.preorderProducts = state.preorderProducts.map(updateVariants);
     },
+    increaseVariantStock(state, action) {
+      const { productId, variantId, amount = 1 } = action.payload;
+
+      const updateVariants = (product) => {
+        if (!product || Number(product.id) !== Number(productId)) {
+          return product;
+        }
+
+        if (!product?.variants?.length) {
+          const currentStock = Number(
+            product.stockQuantity ?? product.quantity ?? product.stock ?? 0
+          );
+          const nextStock = Math.max(0, currentStock + amount);
+
+          state.stockOverrides[getProductOverrideKey(productId)] = nextStock;
+
+          return {
+            ...product,
+            stockQuantity: nextStock,
+          };
+        }
+
+        return {
+          ...product,
+          variants: product.variants.map((variant) => {
+            if (Number(variant.id) !== Number(variantId)) {
+              return variant;
+            }
+
+            const nextStock = Math.max(0, Number(variant.stockQuantity || 0) + amount);
+            state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
+
+            return {
+              ...variant,
+              stockQuantity: nextStock,
+            };
+          }),
+        };
+      };
+
+      state.selectedProduct = updateVariants(state.selectedProduct);
+      state.products = state.products.map(updateVariants);
+      state.preorderProducts = state.preorderProducts.map(updateVariants);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -221,7 +265,8 @@ const productSlice = createSlice({
   },
 });
 
-export const { clearSelectedProduct, decreaseVariantStock } = productSlice.actions;
+export const { clearSelectedProduct, decreaseVariantStock, increaseVariantStock } =
+  productSlice.actions;
 
 export { PRODUCT_STOCK_OVERRIDES_STORAGE_KEY };
 
