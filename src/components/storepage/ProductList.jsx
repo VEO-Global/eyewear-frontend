@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { ProductCard } from "../common/ProductCard";
 import FilterBar from "./FilterBar";
-import { useDispatch, useSelector } from "react-redux";
 import { fetchProducts } from "../../redux/products/producSlice";
 import { fetchAllCategories } from "../../redux/category/categorySlice";
+import { getProductAvailability } from "../../utils/productCatalog";
 
 function getProductCategoryValue(product) {
   if (product?.category && typeof product.category === "object") {
@@ -23,40 +24,6 @@ function getProductCategoryValue(product) {
   }
 
   return "";
-}
-
-function getProductStatusValue(product) {
-  const variantStocks = Array.isArray(product?.variants)
-    ? product.variants
-        .map((variant) => Number(variant?.stockQuantity ?? variant?.quantity ?? 0))
-        .filter((stock) => Number.isFinite(stock))
-    : [];
-
-  if (variantStocks.length) {
-    return variantStocks.some((stock) => stock > 0) ? "in_stock" : "out_of_stock";
-  }
-
-  const directStock = Number(
-    product?.stockQuantity ?? product?.quantity ?? product?.stock ?? NaN
-  );
-
-  if (Number.isFinite(directStock)) {
-    return directStock > 0 ? "in_stock" : "out_of_stock";
-  }
-
-  const fallbackStatus = String(
-    product?.status || product?.productStatus || product?.state || ""
-  ).toLowerCase();
-
-  if (["available", "in_stock", "instock", "active"].includes(fallbackStatus)) {
-    return "in_stock";
-  }
-
-  if (["out_of_stock", "outofstock", "sold_out", "inactive"].includes(fallbackStatus)) {
-    return "out_of_stock";
-  }
-
-  return "out_of_stock";
 }
 
 export default function ProductList() {
@@ -88,7 +55,7 @@ export default function ProductList() {
         ? getProductCategoryValue(product) === selectedCategory
         : true;
       const matchStatus = selectedStatus
-        ? getProductStatusValue(product) === selectedStatus
+        ? getProductAvailability(product) === selectedStatus
         : true;
 
       return matchCategory && matchStatus;

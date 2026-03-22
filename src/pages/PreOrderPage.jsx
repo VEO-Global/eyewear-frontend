@@ -5,8 +5,8 @@ import { useLocation } from "react-router-dom";
 import PreorderForm from "../form/PreorderForm";
 import {
   clearSelectedProduct,
+  fetchPreorderProducts,
   fetchProductById,
-  fetchProducts,
 } from "../redux/products/producSlice";
 
 function FeaturePill({ title, description }) {
@@ -21,20 +21,16 @@ function FeaturePill({ title, description }) {
 export default function PreorderPage() {
   const dispatch = useDispatch();
   const location = useLocation();
-  const { products, selectedProduct, loading } = useSelector(
+  const { preorderProducts, selectedProduct, loading } = useSelector(
     (state) => state.products
   );
-  const [showProductDetail, setShowProductDetail] = useState(
-    Boolean(selectedProduct)
-  );
-
-  const preorderProducts = products.slice(0, 6);
+  const [showProductDetail, setShowProductDetail] = useState(Boolean(selectedProduct));
 
   useEffect(() => {
-    if (!products.length) {
-      dispatch(fetchProducts());
+    if (!preorderProducts.length) {
+      dispatch(fetchPreorderProducts());
     }
-  }, [dispatch, products.length]);
+  }, [dispatch, preorderProducts.length]);
 
   useEffect(() => {
     if (!location.state?.preserveSelection) {
@@ -55,6 +51,8 @@ export default function PreorderPage() {
   }
 
   function renderProductGrid() {
+    const preorderItems = preorderProducts;
+
     return (
       <div className="w-full max-w-4xl">
         <div className="mb-8">
@@ -66,13 +64,13 @@ export default function PreorderPage() {
             Chọn mẫu kính bạn muốn giữ chỗ sớm
           </h2>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-            Chọn một mẫu kính bên dưới để xem chi tiết. Sau đó bạn có thể điền
-            thông tin nhận hàng, chọn màu sắc và kích thước để giữ chỗ sớm.
+            Các mẫu dưới đây là sản phẩm mới, chưa có sẵn trong kho và đang mở đặt
+            trước. Chọn một mẫu để xem chi tiết rồi điền thông tin nhận hàng.
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {preorderProducts.map((product) => (
+          {preorderItems.map((product) => (
             <button
               key={product.id}
               type="button"
@@ -89,18 +87,21 @@ export default function PreorderPage() {
                 <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                   {product.brand}
                 </span>
+                <span className="absolute right-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+                  Đặt trước
+                </span>
               </div>
 
               <div className="flex min-h-[250px] flex-col p-5">
-                <h3 className="text-xl font-semibold text-slate-900 line-clamp-2">
+                <h3 className="line-clamp-2 text-xl font-semibold text-slate-900">
                   {product.name}
                 </h3>
-                <p className="mt-3 text-sm leading-6 text-slate-500 line-clamp-3">
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500">
                   {product.description || "Mẫu kính mới đang mở đặt trước."}
                 </p>
                 <div className="mt-auto flex items-end justify-between gap-4 pt-8">
                   <span className="shrink-0 pb-2 text-xl font-bold leading-none text-slate-900">
-                    {product.basePrice?.toLocaleString("vi-VN")}đ
+                    {Number(product.basePrice || 0).toLocaleString("vi-VN")}đ
                   </span>
                   <span className="inline-flex min-h-[72px] items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-center text-xs font-semibold leading-5 text-teal-700">
                     Chọn mẫu này
@@ -110,6 +111,13 @@ export default function PreorderPage() {
             </button>
           ))}
         </div>
+
+        {!loading && preorderItems.length === 0 ? (
+          <div className="mt-6 rounded-[28px] border border-dashed border-amber-300 bg-amber-50/80 p-6 text-sm leading-7 text-amber-900">
+            Hiện chưa có sản phẩm mở đặt trước. Vui lòng kiểm tra lại dữ liệu từ hệ
+            thống hoặc cập nhật danh sách sản phẩm đặt trước.
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -119,11 +127,11 @@ export default function PreorderPage() {
       return (
         <div className="w-full max-w-lg rounded-[32px] border border-white/80 bg-white/90 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="animate-pulse space-y-4">
-            <div className="h-64 rounded-3xl bg-gray-200"></div>
-            <div className="h-8 w-2/3 rounded bg-gray-200"></div>
-            <div className="h-5 w-1/3 rounded bg-gray-200"></div>
-            <div className="h-6 w-1/2 rounded bg-gray-200"></div>
-            <div className="h-24 rounded bg-gray-200"></div>
+            <div className="h-64 rounded-3xl bg-gray-200" />
+            <div className="h-8 w-2/3 rounded bg-gray-200" />
+            <div className="h-5 w-1/3 rounded bg-gray-200" />
+            <div className="h-6 w-1/2 rounded bg-gray-200" />
+            <div className="h-24 rounded bg-gray-200" />
           </div>
         </div>
       );
@@ -150,11 +158,7 @@ export default function PreorderPage() {
         <div className="overflow-hidden rounded-[32px] border border-white/80 bg-white/95 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
           <div className="relative h-80 overflow-hidden bg-slate-100">
             <img
-              src={
-                selectedProduct.imageUrl ||
-                selectedProduct.image ||
-                "/placeholder.png"
-              }
+              src={selectedProduct.imageUrl || selectedProduct.image || "/placeholder.png"}
               alt={selectedProduct.name}
               className="h-full w-full object-cover"
             />
@@ -170,7 +174,10 @@ export default function PreorderPage() {
           <div className="space-y-6 p-8">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700">
-                Giá dự kiến: {selectedProduct.basePrice?.toLocaleString("vi-VN")}đ
+                Giá dự kiến: {Number(selectedProduct.basePrice || 0).toLocaleString("vi-VN")}đ
+              </span>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-sm font-semibold text-amber-700">
+                Sắp về hàng
               </span>
               <span className="rounded-full border border-sky-200 bg-sky-50 px-4 py-1.5 text-sm font-semibold text-sky-700">
                 Chọn màu và size linh hoạt
@@ -182,7 +189,7 @@ export default function PreorderPage() {
                 Chi tiết sản phẩm
               </p>
               <p className="mt-3 text-base leading-7 text-slate-600">
-              {selectedProduct.description || "Sản phẩm sắp ra mắt."}
+                {selectedProduct.description || "Sản phẩm sắp ra mắt."}
               </p>
             </div>
 
@@ -192,8 +199,8 @@ export default function PreorderPage() {
                 description="EyeCare ưu tiên xác nhận cho khách đã đặt trước."
               />
               <FeaturePill
-                title="Điền nhanh"
-                description="Form bên phải đã tách sẵn các bước quan trọng để dễ thao tác."
+                title="Sản phẩm mới"
+                description="Mẫu kính này thuộc danh mục mới và hiện chưa có sẵn trong kho."
               />
             </div>
           </div>
@@ -221,9 +228,9 @@ export default function PreorderPage() {
                   Đặt trước tại EyeCare Store
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                  Điền thông tin nhận hàng, chọn màu sắc, kích thước và số lượng để
-                  giữ chỗ mẫu kính bạn thích. Toàn bộ form đã được tối ưu để dễ thao
-                  tác trên cả desktop lẫn mobile.
+                  Điền thông tin nhận hàng, chọn màu sắc, kích thước và số lượng để giữ
+                  chỗ mẫu kính bạn thích. Khu vực này chỉ hiển thị các sản phẩm mới đang
+                  mở đặt trước.
                 </p>
               </div>
             </div>

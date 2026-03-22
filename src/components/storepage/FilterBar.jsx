@@ -43,6 +43,7 @@ export default function FilterBar({
   const statuses = useMemo(
     () => [
       { value: "in_stock", label: "Còn hàng" },
+      { value: "preorder", label: "Đặt trước" },
       { value: "out_of_stock", label: "Hết hàng" },
     ],
     []

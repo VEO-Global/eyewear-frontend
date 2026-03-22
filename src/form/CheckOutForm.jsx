@@ -6,9 +6,7 @@ import AddressSelector from "../components/checkout/AddressSelector";
 import PrescriptionSection from "../components/prescription/PrescriptionSection";
 import { fetchProfile } from "../redux/auth/authSlice";
 import { appToast } from "../utils/appToast";
-import {
-  CHECKOUT_LENS_SELECTION_STORAGE_KEY,
-} from "../constants/lensProducts";
+import { CHECKOUT_LENS_SELECTION_STORAGE_KEY } from "../constants/lensProducts";
 import {
   extractLatestCheckoutAddress,
   hasCheckoutAddress,
@@ -41,7 +39,7 @@ const validateShippingAddress = (_, value) => {
 export default function CheckOutForm({ form, lensProducts, lensLoading }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { cart } = useSelector((state) => state.cart);
+  const { cart, selectedVariantIds } = useSelector((state) => state.cart);
   const { user } = useSelector((state) => state.auth);
 
   const prescriptionOption =
@@ -49,9 +47,13 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
   const selectedLensId = Form.useWatch("lensProductId", form);
 
   const selectedLensProduct = useMemo(
-    () =>
-      lensProducts.find((item) => Number(item.id) === Number(selectedLensId)) || null,
+    () => lensProducts.find((item) => Number(item.id) === Number(selectedLensId)) || null,
     [lensProducts, selectedLensId]
+  );
+
+  const selectedCartItems = useMemo(
+    () => cart.filter((item) => selectedVariantIds.includes(item.variantID)),
+    [cart, selectedVariantIds]
   );
 
   useEffect(() => {
@@ -108,9 +110,15 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
       return;
     }
 
+    if (!selectedCartItems.length) {
+      appToast.warning("Vui lòng tick ít nhất một sản phẩm để thanh toán.");
+      return;
+    }
+
     const navigationState = {
       checkoutValues: values,
       selectedLensProduct,
+      selectedCartItems,
     };
 
     sessionStorage.setItem(
@@ -169,11 +177,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
         <Input.TextArea rows={2} placeholder="Ví dụ: Giao giờ hành chính" />
       </Form.Item>
 
-      <Form.Item
-        label="Đơn thuốc"
-        name="prescriptionOption"
-        rules={[{ required: true }]}
-      >
+      <Form.Item label="Đơn thuốc" name="prescriptionOption" rules={[{ required: true }]}>
         <div className="grid grid-cols-2 gap-4">
           {[
             {
@@ -202,9 +206,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
               >
                 <span
                   className={`flex h-6 w-6 items-center justify-center rounded-full border-2 transition ${
-                    isSelected
-                      ? "border-teal-500 bg-white"
-                      : "border-slate-300 bg-white"
+                    isSelected ? "border-teal-500 bg-white" : "border-slate-300 bg-white"
                   }`}
                 >
                   <span
@@ -214,9 +216,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
                   />
                 </span>
 
-                <p className="mt-5 text-xl font-semibold text-slate-900">
-                  {option.title}
-                </p>
+                <p className="mt-5 text-xl font-semibold text-slate-900">{option.title}</p>
                 <p className="mt-4 max-w-[220px] text-sm leading-6 text-slate-500">
                   {option.description}
                 </p>
@@ -273,12 +273,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
       )}
 
       <Form.Item>
-        <Button
-          type="primary"
-          htmlType="submit"
-          size="large"
-          className="w-full"
-        >
+        <Button type="primary" htmlType="submit" size="large" className="w-full">
           Đặt hàng
         </Button>
       </Form.Item>

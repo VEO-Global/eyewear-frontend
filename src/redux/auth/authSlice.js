@@ -64,6 +64,42 @@ async function persistProfileUpdate(id, payload) {
   throw lastError;
 }
 
+function mergeSubmittedAddress(profile, payload) {
+  if (!payload || typeof payload !== "object") {
+    return profile;
+  }
+
+  const hasStructuredAddress =
+    payload.provinceName || payload.districtName || payload.wardName || payload.addressDetail;
+
+  if (!hasStructuredAddress) {
+    return {
+      ...profile,
+      address: payload.address ?? profile?.address,
+    };
+  }
+
+  return {
+    ...profile,
+    address: payload.address ?? profile?.address,
+    addressDetail: payload.addressDetail ?? profile?.addressDetail,
+    province: payload.provinceName ?? profile?.province,
+    district: payload.districtName ?? profile?.district,
+    ward: payload.wardName ?? profile?.ward,
+    latestShippingAddress: {
+      provinceCode: payload.provinceCode,
+      provinceName: payload.provinceName,
+      districtCode: payload.districtCode,
+      districtName: payload.districtName,
+      wardCode: payload.wardCode,
+      wardName: payload.wardName,
+      addressDetail: payload.addressDetail,
+      isLatest: true,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
     const response = await api.post("/auth/login", values);
@@ -103,9 +139,17 @@ export const updateProfile = createAsyncThunk(
         fullName: data.fullName,
         phone: data.phone,
         address: data.address,
+        addressDetail: data.addressDetail,
+        provinceCode: data.provinceCode,
+        provinceName: data.provinceName,
+        districtCode: data.districtCode,
+        districtName: data.districtName,
+        wardCode: data.wardCode,
+        wardName: data.wardName,
       };
 
-      return await persistProfileUpdate(id, payload);
+      const updatedProfile = await persistProfileUpdate(id, payload);
+      return mergeSubmittedAddress(updatedProfile, payload);
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Cập nhật thông tin thất bại. Vui lòng thử lại."));
     }

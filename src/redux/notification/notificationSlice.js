@@ -4,11 +4,21 @@ const THIRTY_DAYS_IN_MS = 30 * 24 * 60 * 60 * 1000;
 const notificationMessageMap = new Map([
   ["create order successfully", "Đặt hàng thành công"],
   ["order created successfully", "Đặt hàng thành công"],
+  ["preorder created successfully", "Đặt trước thành công"],
   ["add to cart successfully", "Đã thêm sản phẩm vào giỏ hàng"],
   ["added to cart successfully", "Đã thêm sản phẩm vào giỏ hàng"],
   ["login successfully", "Đăng nhập thành công"],
   ["register successfully", "Đăng ký thành công"],
   ["update profile successfully", "Cập nhật hồ sơ thành công"],
+  [
+    "request body contains invalid or unsupported values",
+    "Dữ liệu gửi lên chưa hợp lệ. Vui lòng kiểm tra lại thông tin đặt trước.",
+  ],
+  ["invalid request body", "Dữ liệu gửi lên chưa hợp lệ."],
+  ["bad request", "Yêu cầu chưa hợp lệ. Vui lòng kiểm tra lại thông tin."],
+  ["network error", "Không thể kết nối tới máy chủ. Vui lòng thử lại sau."],
+  ["failed to fetch", "Không thể kết nối tới máy chủ. Vui lòng thử lại sau."],
+  ["unauthorized", "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."],
 ]);
 
 export function getNotificationStorageKey(userId) {

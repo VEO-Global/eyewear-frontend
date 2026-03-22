@@ -18,7 +18,7 @@ import { useDispatch, useSelector } from "react-redux";
 import api from "../configs/config-axios";
 import CheckOutForm from "../form/CheckOutForm";
 import CheckOutOrderSummary from "../components/checkout/CheckOutOrderSummary";
-import { clearCart } from "../redux/cart/cartSlice";
+import { removeSelectedItems } from "../redux/cart/cartSlice";
 import { decreaseVariantStock } from "../redux/products/producSlice";
 import { appToast } from "../utils/appToast";
 import {
@@ -113,7 +113,7 @@ function PaymentQrStep() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const { cart, totalPrice } = useSelector((state) => state.cart);
+  const { cart } = useSelector((state) => state.cart);
   const [paymentStatus, setPaymentStatus] = useState("idle");
   const hasProcessedSuccessfulPayment = useRef(false);
 
@@ -132,18 +132,24 @@ function PaymentQrStep() {
     location.state?.selectedLensProduct ||
     storedCheckoutData.selectedLensProduct ||
     null;
+  const selectedCartItems =
+    location.state?.selectedCartItems || storedCheckoutData.selectedCartItems || [];
 
   const lensPrice =
     checkoutValues?.prescriptionOption === "with_prescription"
       ? Number(selectedLensProduct?.price || 0)
       : 0;
-  const subtotal = totalPrice + lensPrice;
+  const selectedTotalPrice = selectedCartItems.reduce(
+    (total, item) => total + item.variantPrice * item.quantity,
+    0
+  );
+  const subtotal = selectedTotalPrice + lensPrice;
   const totalAmount = subtotal + SHIPPING_COST;
-  const firstProduct = cart[0];
+  const firstProduct = selectedCartItems[0];
 
   const paymentCode = useMemo(
-    () => `EC-${String(totalAmount).slice(0, 4)}-${cart.length || 1}QR`,
-    [cart.length, totalAmount]
+    () => `EC-${String(totalAmount).slice(0, 4)}-${selectedCartItems.length || 1}QR`,
+    [selectedCartItems.length, totalAmount]
   );
 
   useEffect(() => {
@@ -163,7 +169,7 @@ function PaymentQrStep() {
 
     hasProcessedSuccessfulPayment.current = true;
 
-    cart.forEach((item) => {
+    selectedCartItems.forEach((item) => {
       dispatch(
         decreaseVariantStock({
           productId: item.productID,
@@ -175,8 +181,8 @@ function PaymentQrStep() {
 
     sessionStorage.removeItem(CHECKOUT_LENS_SELECTION_STORAGE_KEY);
     appToast.success("Thanh toán thành công");
-    dispatch(clearCart());
-  }, [cart, dispatch, paymentStatus]);
+    dispatch(removeSelectedItems(selectedCartItems.map((item) => item.variantID)));
+  }, [dispatch, paymentStatus, selectedCartItems]);
 
   async function handleCopyCode() {
     try {
@@ -273,7 +279,7 @@ function PaymentQrStep() {
             </h2>
 
             <div className="mt-5 space-y-4">
-              {cart.map((item) => (
+              {selectedCartItems.map((item) => (
                 <div
                   key={item.variantID}
                   className="flex items-start justify-between gap-4"
@@ -317,7 +323,7 @@ function PaymentQrStep() {
             <div className="space-y-4 text-lg">
               <div className="flex items-center justify-between text-slate-800">
                 <span>Tạm tính</span>
-                <span>{formatCurrency(totalPrice)}</span>
+                <span>{formatCurrency(selectedTotalPrice)}</span>
               </div>
 
               {checkoutValues?.prescriptionOption === "with_prescription" &&
@@ -462,10 +468,10 @@ export default function CheckoutPage() {
 
         <NavLink
           className="mt-5 flex items-center gap-2 rounded-2xl hover:underline"
-          to="/products"
+          to="/user/cart"
         >
           <ArrowBigLeft className="h-5 w-5" />
-          <span>Tiếp tục xem các sản phẩm khác</span>
+          <span>Quay về giỏ hàng</span>
         </NavLink>
       </div>
     </main>

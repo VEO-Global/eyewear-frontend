@@ -26,6 +26,7 @@ function getStoredCart(userId) {
 
 const initialState = {
   cart: [],
+  selectedVariantIds: [],
   totalProduct: 0,
   totalPrice: 0,
 };
@@ -36,6 +37,10 @@ function calculateCart(state) {
     (total, item) => total + item.variantPrice * item.quantity,
     0
   );
+}
+
+function isSelectableCartItem(item) {
+  return !item?.isPreorder || item?.isPreorderReady;
 }
 
 const cartSlice = createSlice({
@@ -53,12 +58,20 @@ const cartSlice = createSlice({
         state.cart.push({ ...product, quantity: quantityToAdd });
       }
 
+      if (
+        isSelectableCartItem(product) &&
+        !state.selectedVariantIds.includes(product.variantID)
+      ) {
+        state.selectedVariantIds.push(product.variantID);
+      }
+
       calculateCart(state);
     },
 
     removeItem(state, action) {
       const variantId = action.payload;
       state.cart = state.cart.filter((item) => item.variantID !== variantId);
+      state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
       calculateCart(state);
     },
 
@@ -74,8 +87,61 @@ const cartSlice = createSlice({
       calculateCart(state);
     },
 
+    toggleSelectedItem(state, action) {
+      const variantId = action.payload;
+
+      if (state.selectedVariantIds.includes(variantId)) {
+        state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
+      } else if (
+        state.cart.some(
+          (item) => item.variantID === variantId && isSelectableCartItem(item)
+        )
+      ) {
+        state.selectedVariantIds.push(variantId);
+      }
+    },
+
+    toggleSelectAllItems(state) {
+      const selectableVariantIds = state.cart
+        .filter((item) => isSelectableCartItem(item))
+        .map((item) => item.variantID);
+
+      if (
+        selectableVariantIds.length > 0 &&
+        state.selectedVariantIds.length === selectableVariantIds.length
+      ) {
+        state.selectedVariantIds = [];
+      } else {
+        state.selectedVariantIds = selectableVariantIds;
+      }
+    },
+
+    updatePreorderReadyStatus(state, action) {
+      const { variantId, isReady } = action.payload || {};
+      const item = state.cart.find((cartItem) => cartItem.variantID === variantId);
+
+      if (!item) return;
+
+      item.isPreorderReady = Boolean(isReady);
+
+      if (!isSelectableCartItem(item)) {
+        state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
+      }
+    },
+
+    removeSelectedItems(state, action) {
+      const variantIds = Array.isArray(action.payload) ? action.payload : [];
+
+      state.cart = state.cart.filter((item) => !variantIds.includes(item.variantID));
+      state.selectedVariantIds = state.selectedVariantIds.filter(
+        (id) => !variantIds.includes(id)
+      );
+      calculateCart(state);
+    },
+
     clearCart(state) {
       state.cart = [];
+      state.selectedVariantIds = [];
       state.totalProduct = 0;
       state.totalPrice = 0;
     },
@@ -83,14 +149,29 @@ const cartSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchProfile.fulfilled, (state, action) => {
-        state.cart = getStoredCart(action.payload?.id);
+        if (!state.cart.length) {
+          state.cart = getStoredCart(action.payload?.id);
+          state.selectedVariantIds = state.cart
+            .filter((item) => isSelectableCartItem(item))
+            .map((item) => item.variantID);
+        }
+
         calculateCart(state);
       })
       .addCase(logout, () => initialState);
   },
 });
 
-export const { addItem, removeItem, updateQuantity, clearCart } = cartSlice.actions;
+export const {
+  addItem,
+  removeItem,
+  updateQuantity,
+  toggleSelectedItem,
+  toggleSelectAllItems,
+  updatePreorderReadyStatus,
+  removeSelectedItems,
+  clearCart,
+} = cartSlice.actions;
 
 export { getCartStorageKey };
 

@@ -13,20 +13,28 @@ function formatCurrency(amount) {
 }
 
 export default function CheckOutOrderSummary({ form, lensProducts }) {
-  const { cart, totalPrice } = useSelector((state) => state.cart);
+  const { cart, selectedVariantIds } = useSelector((state) => state.cart);
   const prescriptionOption =
     Form.useWatch("prescriptionOption", form) || "without_prescription";
   const selectedLensId = Form.useWatch("lensProductId", form);
 
+  const selectedCartItems = useMemo(
+    () => cart.filter((item) => selectedVariantIds.includes(item.variantID)),
+    [cart, selectedVariantIds]
+  );
+
   const selectedLensProduct = useMemo(
-    () =>
-      lensProducts.find((item) => Number(item.id) === Number(selectedLensId)) || null,
+    () => lensProducts.find((item) => Number(item.id) === Number(selectedLensId)) || null,
     [lensProducts, selectedLensId]
   );
 
   const lensPrice =
     prescriptionOption === "with_prescription" ? Number(selectedLensProduct?.price || 0) : 0;
-  const subtotal = totalPrice + lensPrice;
+  const selectedTotalPrice = selectedCartItems.reduce(
+    (total, item) => total + item.variantPrice * item.quantity,
+    0
+  );
+  const subtotal = selectedTotalPrice + lensPrice;
   const totalAmount = subtotal + SHIPPING_COST;
 
   return (
@@ -34,7 +42,7 @@ export default function CheckOutOrderSummary({ form, lensProducts }) {
       <h2 className="mb-6 text-xl font-semibold">Tóm tắt đơn hàng</h2>
 
       <div className="mb-6 space-y-4">
-        {cart.map((item) => (
+        {selectedCartItems.map((item) => (
           <div
             key={item.variantID}
             className="flex items-start justify-between gap-4 text-sm"
@@ -76,7 +84,7 @@ export default function CheckOutOrderSummary({ form, lensProducts }) {
       <div className="space-y-3 text-sm">
         <div className="flex justify-between">
           <span>Tạm tính</span>
-          <span>{formatCurrency(totalPrice)}</span>
+          <span>{formatCurrency(selectedTotalPrice)}</span>
         </div>
 
         {prescriptionOption === "with_prescription" && selectedLensProduct ? (

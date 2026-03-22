@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Form, Input, InputNumber, Select } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import api from "../configs/config-axios";
 import AddressSelector from "../components/checkout/AddressSelector";
 import { fetchProfile } from "../redux/auth/authSlice";
@@ -36,9 +37,32 @@ const validateShippingAddress = (_, value) => {
   return Promise.resolve();
 };
 
+function buildPreorderRequestBody(values, currentVariant) {
+  const selectedAddress = values.shippingAddress || {};
+  const note = values.note?.trim();
+
+  return {
+    orderType: "PREORDER_NORMAL",
+    receiverName: values.receiverName?.trim() || "",
+    phoneNumber: values.phoneNumber?.trim() || "",
+    province: selectedAddress.provinceName?.trim() || "",
+    district: selectedAddress.districtName?.trim() || "",
+    ward: selectedAddress.wardName?.trim() || "",
+    addressDetail: selectedAddress.addressDetail?.trim() || "",
+    ...(note ? { note } : {}),
+    items: [
+      {
+        variantId: Number(currentVariant.id),
+        quantity: Math.max(1, Number(values.quantity) || 1),
+      },
+    ],
+  };
+}
+
 export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -143,68 +167,66 @@ export default function PreorderForm({ selectedProduct }) {
     }
   }, [selectedColor, selectedSize, variants]);
 
-  const handleSubmit = async (values) => {
+  async function handleSubmit(values) {
     if (!selectedProduct || !currentVariant) {
       appToast.warning("Vui lòng chọn sản phẩm, màu sắc và size trước khi đặt trước");
       return;
     }
 
-    const selectedAddress = values.shippingAddress || {};
-    const requestBody = {
-      orderType: "PREORDER_NORMAL",
-      receiverName: values.receiverName,
-      phoneNumber: values.phoneNumber,
-      province: selectedAddress.provinceName || "",
-      district: selectedAddress.districtName || "",
-      ward: selectedAddress.wardName || "",
-      addressDetail: selectedAddress.addressDetail?.trim() || "",
-      note: values.note,
-      items: [
-        {
-          variantId: currentVariant.id,
-          quantity: values.quantity,
-        },
-      ],
-    };
+    const requestBody = buildPreorderRequestBody(values, currentVariant);
 
-    await api.post("/orders", requestBody);
-    await dispatch(fetchProfile());
+    try {
+      await api.post("/orders", requestBody);
 
-    dispatch(
-      addItem({
-        productID: selectedProduct.id,
-        variantID: currentVariant.id,
-        variantPrice: currentVariant.price,
-        color: currentVariant.color || selectedColor,
-        size: currentVariant.size || selectedSize,
-        name: selectedProduct.name,
-        brand: selectedProduct.brand,
-        description: selectedProduct.description,
-        material: selectedProduct.material,
-        imgUrl: selectedProduct.imageUrl || selectedProduct.image,
-        gender: selectedProduct.gender,
-        cartQuantity: values.quantity,
-      })
-    );
+      dispatch(
+        addItem({
+          productID: selectedProduct.id,
+          variantID: currentVariant.id,
+          variantPrice: currentVariant.price,
+          color: currentVariant.color || selectedColor,
+          size: currentVariant.size || selectedSize,
+          name: selectedProduct.name,
+          brand: selectedProduct.brand,
+          description: selectedProduct.description,
+          material: selectedProduct.material,
+          imgUrl: selectedProduct.imageUrl || selectedProduct.image,
+          gender: selectedProduct.gender,
+          cartQuantity: Math.max(1, Number(values.quantity) || 1),
+          isPreorder: true,
+          isPreorderReady: false,
+        })
+      );
 
-    appToast.success("Đặt trước thành công và đã thêm sản phẩm vào giỏ hàng");
+      dispatch(fetchProfile());
 
-    form.setFieldsValue({
-      quantity: 1,
-      receiverName: undefined,
-      phoneNumber: undefined,
-      shippingAddress: undefined,
-      note: undefined,
-    });
-  };
+      appToast.success("Đặt trước thành công và đã thêm sản phẩm vào giỏ hàng");
+
+      form.setFieldsValue({
+        quantity: 1,
+        receiverName: undefined,
+        phoneNumber: undefined,
+        shippingAddress: undefined,
+        note: undefined,
+      });
+
+      navigate("/user/cart");
+    } catch (error) {
+      const responseData = error.response?.data;
+      const errorMessage =
+        (typeof responseData === "string" && responseData) ||
+        responseData?.message ||
+        "Không thể xác nhận đặt trước lúc này.";
+
+      appToast.error(errorMessage);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl py-2">
       {!selectedProduct && (
         <div className="mb-8 rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
-          Hãy chọn một sản phẩm ở cột bên trái trước khi điền form đặt trước.
-          Khi đã chọn mẫu kính, bạn sẽ thấy đầy đủ thông tin để xác nhận nhanh
-          hơn.
+          Hãy chọn một sản phẩm ở cột bên trái trước khi điền form đặt trước. Khi đã
+          chọn mẫu kính, bạn sẽ thấy đầy đủ thông tin để xác nhận nhanh hơn.
         </div>
       )}
 
@@ -219,12 +241,10 @@ export default function PreorderForm({ selectedProduct }) {
       >
         <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-6">
-            <h3 className="text-xl font-semibold text-slate-900">
-              Thông tin giao hàng
-            </h3>
+            <h3 className="text-xl font-semibold text-slate-900">Thông tin giao hàng</h3>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              EyeCare sẽ dùng thông tin này để liên hệ xác nhận và thông báo khi
-              sản phẩm sẵn sàng.
+              EyeCare sẽ dùng thông tin này để liên hệ xác nhận và thông báo khi sản
+              phẩm sẵn sàng.
             </p>
           </div>
 

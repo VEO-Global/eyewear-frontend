@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
 import { logout } from "../auth/authSlice";
+import { isPreorderProduct, normalizeCatalogType } from "../../utils/productCatalog";
 
 const PRODUCT_STOCK_OVERRIDES_STORAGE_KEY = "product-stock-overrides";
 
@@ -25,6 +26,27 @@ function getVariantOverrideKey(productId, variantId) {
 
 function getProductOverrideKey(productId) {
   return `${Number(productId)}`;
+}
+
+function normalizeProduct(product) {
+  if (!product || typeof product !== "object") {
+    return product;
+  }
+
+  const normalizedCatalogType = isPreorderProduct(product)
+    ? "NEW"
+    : normalizeCatalogType(product.catalogType);
+
+  return {
+    ...product,
+    catalogType: normalizedCatalogType,
+    variants: Array.isArray(product.variants)
+      ? product.variants.map((variant) => ({
+          ...variant,
+          stockQuantity: Number(variant?.stockQuantity ?? variant?.quantity ?? 0),
+        }))
+      : product.variants,
+  };
 }
 
 function applyStockOverridesToProduct(product, stockOverrides) {
@@ -66,36 +88,59 @@ function applyStockOverridesToProduct(product, stockOverrides) {
 
 const initialState = {
   products: [],
+  preorderProducts: [],
   selectedProduct: null,
   loading: false,
   error: null,
   stockOverrides: readStoredStockOverrides(),
 };
 
-export const fetchProducts = createAsyncThunk("products/fetch", async (_, { rejectWithValue }) => {
-  try {
-    const response = await api.get("/products");
-    return response.data;
-  } catch (error) {
-    return rejectWithValue(error.response?.data?.message || "Không thể lấy danh sách sản phẩm");
+export const fetchProducts = createAsyncThunk(
+  "products/fetch",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/products");
+      return Array.isArray(response.data) ? response.data.map(normalizeProduct) : [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Không thể lấy danh sách sản phẩm"
+      );
+    }
   }
-});
+);
 
-export const fetchProductById = createAsyncThunk("products/fetchById", async (id, { rejectWithValue }) => {
-  try {
-    const response = await api.get(`/products/${Number(id)}`);
-    const variants = await api.get(`/variants/product/${Number(id)}`);
-
-    const productDetail = {
-      ...response.data,
-      variants: variants.data,
-    };
-
-    return productDetail;
-  } catch (error) {
-    return rejectWithValue(error.response?.data?.message || "Không thể lấy sản phẩm");
+export const fetchPreorderProducts = createAsyncThunk(
+  "products/fetchPreorder",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/products/preorder");
+      return Array.isArray(response.data)
+        ? response.data.map(normalizeProduct).filter((product) => isPreorderProduct(product))
+        : [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Không thể lấy danh sách sản phẩm đặt trước"
+      );
+    }
   }
-});
+);
+
+export const fetchProductById = createAsyncThunk(
+  "products/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/products/${Number(id)}`);
+      const variants = await api.get(`/variants/product/${Number(id)}`);
+
+      return normalizeProduct({
+        ...response.data,
+        variants: variants.data,
+      });
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Không thể lấy sản phẩm");
+    }
+  }
+);
 
 const productSlice = createSlice({
   name: "products",
@@ -133,7 +178,7 @@ const productSlice = createSlice({
               return variant;
             }
 
-            const nextStock = Math.max(0, (variant.stockQuantity || 0) - amount);
+            const nextStock = Math.max(0, Number(variant.stockQuantity || 0) - amount);
             state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
 
             return {
@@ -146,6 +191,7 @@ const productSlice = createSlice({
 
       state.selectedProduct = updateVariants(state.selectedProduct);
       state.products = state.products.map(updateVariants);
+      state.preorderProducts = state.preorderProducts.map(updateVariants);
     },
   },
   extraReducers: (builder) => {
@@ -164,12 +210,24 @@ const productSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
+      .addCase(fetchPreorderProducts.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchPreorderProducts.fulfilled, (state, action) => {
+        state.loading = false;
+        state.preorderProducts = action.payload.map((product) =>
+          applyStockOverridesToProduct(product, state.stockOverrides)
+        );
+      })
+      .addCase(fetchPreorderProducts.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
       .addCase(fetchProductById.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-
       .addCase(fetchProductById.fulfilled, (state, action) => {
         state.loading = false;
         state.selectedProduct = applyStockOverridesToProduct(
@@ -177,13 +235,13 @@ const productSlice = createSlice({
           state.stockOverrides
         );
       })
-
       .addCase(fetchProductById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
       .addCase(logout, (state) => {
         state.selectedProduct = null;
+        state.preorderProducts = [];
       });
   },
 });

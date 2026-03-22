@@ -40,7 +40,7 @@ function findOptionByCodeOrName(items, code, name) {
   );
 }
 
-export default function AddressSelector({ value, onChange }) {
+export default function AddressSelector({ value, onChange, disabled = false }) {
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
   const [wards, setWards] = useState([]);
@@ -296,6 +296,9 @@ export default function AddressSelector({ value, onChange }) {
             value={selectedAddress.provinceCode}
             onChange={handleProvinceChange}
             options={provinceOptions}
+            disabled={disabled}
+            size="large"
+            className="w-full"
             loading={provinceLoading}
             notFoundContent={
               provinceError || (provinceLoading ? "Đang tải..." : "Không có dữ liệu")
@@ -312,7 +315,9 @@ export default function AddressSelector({ value, onChange }) {
             value={selectedAddress.districtCode}
             onChange={handleDistrictChange}
             options={districtOptions}
-            disabled={typeof selectedAddress.provinceCode !== "number"}
+            disabled={disabled || typeof selectedAddress.provinceCode !== "number"}
+            size="large"
+            className="w-full"
             loading={districtLoading}
             notFoundContent={
               districtError || (districtLoading ? "Đang tải..." : "Không có dữ liệu")
@@ -329,7 +334,9 @@ export default function AddressSelector({ value, onChange }) {
             value={selectedAddress.wardCode}
             onChange={handleWardChange}
             options={wardOptions}
-            disabled={typeof selectedAddress.districtCode !== "number"}
+            disabled={disabled || typeof selectedAddress.districtCode !== "number"}
+            size="large"
+            className="w-full"
             loading={wardLoading}
             notFoundContent={
               wardError || (wardLoading ? "Đang tải..." : "Không có dữ liệu")
@@ -346,6 +353,8 @@ export default function AddressSelector({ value, onChange }) {
         value={selectedAddress.addressDetail}
         onChange={handleAddressDetailChange}
         size="large"
+        disabled={disabled}
+        className="w-full"
       />
     </div>
   );

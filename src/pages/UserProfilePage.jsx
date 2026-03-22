@@ -1,12 +1,57 @@
-import { useEffect, useState } from "react";
-import { UserCircle, CheckCircle, MapPin, Phone, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { UserCircle, CheckCircle, Phone, ShieldCheck } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
+import AddressSelector from "../components/checkout/AddressSelector";
 import { appToast } from "../utils/appToast";
 import { fetchProfile, updateProfile } from "../redux/auth/authSlice";
 import {
   extractLatestCheckoutAddress,
   formatCheckoutAddress,
 } from "../utils/userAddress";
+
+const emptyShippingAddress = {
+  provinceCode: undefined,
+  provinceName: "",
+  districtCode: undefined,
+  districtName: "",
+  wardCode: undefined,
+  wardName: "",
+  addressDetail: "",
+};
+
+function buildProfileFormState(user) {
+  const latestAddress = extractLatestCheckoutAddress(user);
+  const fallbackAddress = latestAddress
+    ? {
+        ...emptyShippingAddress,
+        ...latestAddress,
+        addressDetail: latestAddress.addressDetail?.trim() || "",
+      }
+    : { ...emptyShippingAddress };
+
+  const directAddress = typeof user?.address === "string" ? user.address.trim() : "";
+
+  return {
+    fullName: user?.fullName || "",
+    phone: user?.phone || "",
+    shippingAddress: {
+      ...fallbackAddress,
+      addressDetail: fallbackAddress.addressDetail || directAddress,
+    },
+  };
+}
+
+function isValidShippingAddress(address) {
+  return Boolean(
+    typeof address?.provinceCode === "number" &&
+      address?.provinceName &&
+      typeof address?.districtCode === "number" &&
+      address?.districtName &&
+      typeof address?.wardCode === "number" &&
+      address?.wardName &&
+      address?.addressDetail?.trim()
+  );
+}
 
 export default function UserProfilePage() {
   const dispatch = useDispatch();
@@ -15,7 +60,7 @@ export default function UserProfilePage() {
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
-    address: "",
+    shippingAddress: { ...emptyShippingAddress },
   });
 
   useEffect(() => {
@@ -26,30 +71,31 @@ export default function UserProfilePage() {
   }, [dispatch]);
 
   useEffect(() => {
-    const latestAddress = extractLatestCheckoutAddress(user);
-    const fallbackAddress = formatCheckoutAddress(latestAddress);
-
-    setFormData({
-      fullName: user?.fullName || "",
-      phone: user?.phone || "",
-      address: user?.address || fallbackAddress || "",
-    });
+    setFormData(buildProfileFormState(user));
   }, [user]);
+
+  const fullAddress = useMemo(
+    () => formatCheckoutAddress(formData.shippingAddress),
+    [formData.shippingAddress]
+  );
 
   function handleChange(event) {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleCancel() {
-    const latestAddress = extractLatestCheckoutAddress(user);
-    const fallbackAddress = formatCheckoutAddress(latestAddress);
+  function handleAddressChange(nextAddress) {
+    setFormData((prev) => ({
+      ...prev,
+      shippingAddress: {
+        ...emptyShippingAddress,
+        ...(nextAddress || {}),
+      },
+    }));
+  }
 
-    setFormData({
-      fullName: user?.fullName || "",
-      phone: user?.phone || "",
-      address: user?.address || fallbackAddress || "",
-    });
+  function handleCancel() {
+    setFormData(buildProfileFormState(user));
     setIsEditing(false);
   }
 
@@ -61,13 +107,31 @@ export default function UserProfilePage() {
       return;
     }
 
+    if (!isValidShippingAddress(formData.shippingAddress)) {
+      appToast.warning(
+        "Vui lòng chọn đầy đủ tỉnh/thành, quận/huyện, phường/xã và địa chỉ chi tiết."
+      );
+      return;
+    }
+
+    const addressDetail = formData.shippingAddress.addressDetail.trim();
+
     const result = await dispatch(
       updateProfile({
         id: user.id,
         data: {
           fullName: formData.fullName.trim(),
           phone: formData.phone.trim(),
-          address: formData.address.trim(),
+          // Backend hiện đang reject chuỗi có dấu phẩy ở field address,
+          // nên chỉ gửi phần địa chỉ chi tiết để lưu an toàn.
+          address: addressDetail,
+          addressDetail,
+          provinceCode: formData.shippingAddress.provinceCode,
+          provinceName: formData.shippingAddress.provinceName.trim(),
+          districtCode: formData.shippingAddress.districtCode,
+          districtName: formData.shippingAddress.districtName.trim(),
+          wardCode: formData.shippingAddress.wardCode,
+          wardName: formData.shippingAddress.wardName.trim(),
         },
       })
     );
@@ -169,8 +233,8 @@ export default function UserProfilePage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
                   <label
                     htmlFor="fullName"
                     className="mb-3 block text-sm font-semibold text-slate-700"
@@ -187,7 +251,7 @@ export default function UserProfilePage() {
                   />
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
                   <label
                     htmlFor="phone"
                     className="mb-3 block text-sm font-semibold text-slate-700"
@@ -211,26 +275,21 @@ export default function UserProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                <label
-                  htmlFor="address"
-                  className="mb-3 block text-sm font-semibold text-slate-700"
-                >
-                  Địa chỉ
-                </label>
-                <div className="relative">
-                  <MapPin
-                    size={18}
-                    className="pointer-events-none absolute left-4 top-4 text-slate-400"
-                  />
-                  <textarea
-                    id="address"
-                    name="address"
-                    rows="4"
-                    value={formData.address}
-                    onChange={handleChange}
+              <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-slate-700">Địa chỉ nhận hàng</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    {fullAddress
+                      ? `Địa chỉ nhận hàng đầy đủ: ${fullAddress}`
+                      : "Chưa có địa chỉ nhận hàng đầy đủ."}
+                  </p>
+                </div>
+
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] sm:p-5">
+                  <AddressSelector
+                    value={formData.shippingAddress}
+                    onChange={handleAddressChange}
                     disabled={!isEditing}
-                    className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-slate-900 outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                   />
                 </div>
               </div>
