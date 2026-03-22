@@ -57,9 +57,9 @@ export default function PreorderPage() {
             Chọn sản phẩm để đặt trước
           </h2>
           <p className="mt-3 text-gray-600">
-            Chọn một trong các mẫu sắp ra mắt bên dưới. Sau khi bấm vào sản
-            phẩm, bên trái sẽ hiển thị thông tin chi tiết để bạn xác nhận trước
-            khi gửi form.
+            Chọn một trong các mẫu kính bên dưới. Sau khi bấm vào sản phẩm, phần
+            bên phải sẽ hiển thị form để bạn hoàn tất đơn hàng hoặc cung cấp toa
+            thuốc nếu đặt kính có độ.
           </p>
         </div>
 
@@ -80,14 +80,12 @@ export default function PreorderPage() {
               </div>
 
               <div className="p-5">
-                <p className="text-sm font-medium text-teal-600">
-                  {product.brand}
-                </p>
+                <p className="text-sm font-medium text-teal-600">{product.brand}</p>
                 <h3 className="mt-2 text-xl font-semibold text-gray-900 line-clamp-2">
                   {product.name}
                 </h3>
                 <p className="mt-3 text-sm leading-6 text-gray-500 line-clamp-3">
-                  {product.description || "Mẫu kính mới sắp được mở đặt trước."}
+                  {product.description || "Mẫu kính mới đang mở đặt trước."}
                 </p>
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-lg font-bold text-gray-900">
@@ -125,7 +123,7 @@ export default function PreorderPage() {
     }
 
     return (
-      <div className="max-w-md w-full flex flex-col gap-6">
+      <div className="flex w-full max-w-md flex-col gap-6">
         <button
           type="button"
           onClick={() => {
@@ -138,7 +136,7 @@ export default function PreorderPage() {
           Quay lại danh sách sản phẩm
         </button>
 
-        <div className="w-full rounded-3xl overflow-hidden bg-white shadow-lg border border-gray-100">
+        <div className="w-full overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-lg">
           <img
             src={
               selectedProduct.imageUrl ||
@@ -170,16 +168,21 @@ export default function PreorderPage() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
-      <div className="flex items-center justify-center bg-gray-50 px-10 py-12 border-r">
+    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="flex items-center justify-center border-r bg-gray-50 px-6 py-12 lg:px-10">
         {showProductDetail ? renderSelectedProduct() : renderProductGrid()}
       </div>
 
-      <div className="flex items-center justify-center px-6 py-12 bg-gradient-to-bl from-teal-50 via-white to-blue-50">
-        <div className="w-full max-w-md bg-white/80 backdrop-blur rounded-2xl p-10 shadow-xl">
-          <h1 className="text-4xl font-serif font-bold text-gray-900 mb-6">
-            Đặt trước sản phẩm
+      <div className="flex items-center justify-center bg-gradient-to-bl from-teal-50 via-white to-blue-50 px-4 py-12 sm:px-6 lg:px-10">
+        <div className="w-full max-w-4xl rounded-[32px] border border-white/70 bg-white/85 p-6 shadow-xl backdrop-blur sm:p-8 lg:p-10">
+          <h1 className="mb-3 text-3xl font-serif font-bold text-gray-900 sm:text-4xl">
+            Đặt đơn tại EyeCare Store
           </h1>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+            Điền thông tin nhận hàng và cung cấp toa thuốc nếu bạn đang đặt kính
+            có độ. Mọi bước đều được trình bày đơn giản để bạn dễ thao tác trên
+            cả điện thoại và máy tính.
+          </p>
           <PreorderForm selectedProduct={selectedProduct} />
         </div>
       </div>

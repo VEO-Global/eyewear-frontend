@@ -1,7 +1,9 @@
 import { configureStore } from "@reduxjs/toolkit";
 
 import authReducer from "./auth/authSlice";
-import productReducer from "./products/producSlice";
+import productReducer, {
+  PRODUCT_STOCK_OVERRIDES_STORAGE_KEY,
+} from "./products/producSlice";
 import cartReducer, { getCartStorageKey } from "./cart/cartSlice";
 import categoriesReducer from "./category/categorySlice";
 import adminReducer from "./admin/adminSlice";
@@ -43,6 +45,11 @@ store.subscribe(() => {
       JSON.stringify(state.cart.cart)
     );
   }
+
+  localStorage.setItem(
+    PRODUCT_STOCK_OVERRIDES_STORAGE_KEY,
+    JSON.stringify(state.products.stockOverrides)
+  );
 
   localStorage.setItem(
     notificationStorageKey,

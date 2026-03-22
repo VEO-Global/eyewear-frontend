@@ -112,10 +112,6 @@ export default function ProductList() {
     }
   }, [currentPage, totalPages]);
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [currentPage]);
-
   function handleReset() {
     setSelectedCategory("");
     setSelectedStatus("");

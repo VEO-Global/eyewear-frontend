@@ -1,5 +1,5 @@
 import { Input, Select } from "antd";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../configs/config-axios";
 
 const emptyAddress = {
@@ -9,8 +9,36 @@ const emptyAddress = {
   districtName: "",
   wardCode: undefined,
   wardName: "",
-  shippingAddress: "",
+  addressDetail: "",
 };
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function findOptionByCodeOrName(items, code, name) {
+  if (!Array.isArray(items) || !items.length) {
+    return null;
+  }
+
+  if (typeof code === "number") {
+    const matchedByCode = items.find((item) => item.code === code);
+    if (matchedByCode) {
+      return matchedByCode;
+    }
+  }
+
+  const normalizedName = normalizeText(name);
+  if (!normalizedName) {
+    return null;
+  }
+
+  return (
+    items.find((item) => normalizeText(item.name) === normalizedName) || null
+  );
+}
 
 export default function AddressSelector({ value, onChange }) {
   const [provinces, setProvinces] = useState([]);
@@ -25,8 +53,16 @@ export default function AddressSelector({ value, onChange }) {
   const [districtError, setDistrictError] = useState("");
   const [wardError, setWardError] = useState("");
 
-  const didHydrateFromValue = useRef(false);
-  const selectedAddress = value || emptyAddress;
+  const fetchedProvinceCodeRef = useRef();
+  const fetchedDistrictCodeRef = useRef();
+  const selectedAddress = useMemo(
+    () => ({
+      ...emptyAddress,
+      ...(value || {}),
+      addressDetail: value?.addressDetail ?? value?.shippingAddress ?? "",
+    }),
+    [value]
+  );
 
   const emitChange = (patch) => {
     onChange?.({
@@ -70,9 +106,15 @@ export default function AddressSelector({ value, onChange }) {
   const fetchDistricts = async (provinceCode) => {
     if (typeof provinceCode !== "number") {
       setDistricts([]);
+      fetchedProvinceCodeRef.current = undefined;
       return;
     }
 
+    if (fetchedProvinceCodeRef.current === provinceCode) {
+      return;
+    }
+
+    fetchedProvinceCodeRef.current = provinceCode;
     setDistrictLoading(true);
     setDistrictError("");
 
@@ -93,9 +135,15 @@ export default function AddressSelector({ value, onChange }) {
   const fetchWards = async (districtCode) => {
     if (typeof districtCode !== "number") {
       setWards([]);
+      fetchedDistrictCodeRef.current = undefined;
       return;
     }
 
+    if (fetchedDistrictCodeRef.current === districtCode) {
+      return;
+    }
+
+    fetchedDistrictCodeRef.current = districtCode;
     setWardLoading(true);
     setWardError("");
 
@@ -116,22 +164,88 @@ export default function AddressSelector({ value, onChange }) {
   }, []);
 
   useEffect(() => {
-    if (
-      didHydrateFromValue.current ||
-      typeof selectedAddress.provinceCode !== "number"
-    ) {
+    const matchedProvince = findOptionByCodeOrName(
+      provinces,
+      selectedAddress.provinceCode,
+      selectedAddress.provinceName
+    );
+
+    if (!matchedProvince) {
       return;
     }
 
-    didHydrateFromValue.current = true;
-    fetchDistricts(selectedAddress.provinceCode);
-
-    if (typeof selectedAddress.districtCode === "number") {
-      fetchWards(selectedAddress.districtCode);
+    if (
+      matchedProvince.code !== selectedAddress.provinceCode ||
+      matchedProvince.name !== selectedAddress.provinceName
+    ) {
+      emitChange({
+        provinceCode: matchedProvince.code,
+        provinceName: matchedProvince.name,
+      });
+      return;
     }
-  }, [selectedAddress.provinceCode, selectedAddress.districtCode]);
+
+    fetchDistricts(matchedProvince.code);
+  }, [
+    provinces,
+    selectedAddress.provinceCode,
+    selectedAddress.provinceName,
+  ]);
+
+  useEffect(() => {
+    const matchedDistrict = findOptionByCodeOrName(
+      districts,
+      selectedAddress.districtCode,
+      selectedAddress.districtName
+    );
+
+    if (!matchedDistrict) {
+      return;
+    }
+
+    if (
+      matchedDistrict.code !== selectedAddress.districtCode ||
+      matchedDistrict.name !== selectedAddress.districtName
+    ) {
+      emitChange({
+        districtCode: matchedDistrict.code,
+        districtName: matchedDistrict.name,
+      });
+      return;
+    }
+
+    fetchWards(matchedDistrict.code);
+  }, [
+    districts,
+    selectedAddress.districtCode,
+    selectedAddress.districtName,
+  ]);
+
+  useEffect(() => {
+    const matchedWard = findOptionByCodeOrName(
+      wards,
+      selectedAddress.wardCode,
+      selectedAddress.wardName
+    );
+
+    if (!matchedWard) {
+      return;
+    }
+
+    if (
+      matchedWard.code !== selectedAddress.wardCode ||
+      matchedWard.name !== selectedAddress.wardName
+    ) {
+      emitChange({
+        wardCode: matchedWard.code,
+        wardName: matchedWard.name,
+      });
+    }
+  }, [wards, selectedAddress.wardCode, selectedAddress.wardName]);
 
   const handleProvinceChange = (provinceCode, option) => {
+    fetchedProvinceCodeRef.current = undefined;
+    fetchedDistrictCodeRef.current = undefined;
     setDistricts([]);
     setWards([]);
     setDistrictError("");
@@ -145,11 +259,10 @@ export default function AddressSelector({ value, onChange }) {
       wardCode: undefined,
       wardName: "",
     });
-
-    fetchDistricts(provinceCode);
   };
 
   const handleDistrictChange = (districtCode, option) => {
+    fetchedDistrictCodeRef.current = undefined;
     setWards([]);
     setWardError("");
 
@@ -159,8 +272,6 @@ export default function AddressSelector({ value, onChange }) {
       wardCode: undefined,
       wardName: "",
     });
-
-    fetchWards(districtCode);
   };
 
   const handleWardChange = (wardCode, option) => {
@@ -172,7 +283,7 @@ export default function AddressSelector({ value, onChange }) {
 
   const handleAddressDetailChange = (event) => {
     emitChange({
-      shippingAddress: event.target.value,
+      addressDetail: event.target.value,
     });
   };
 
@@ -232,7 +343,7 @@ export default function AddressSelector({ value, onChange }) {
 
       <Input
         placeholder="Số nhà, tên đường..."
-        value={selectedAddress.shippingAddress}
+        value={selectedAddress.addressDetail}
         onChange={handleAddressDetailChange}
         size="large"
       />

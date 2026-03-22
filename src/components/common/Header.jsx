@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search, ShoppingCart, Glasses, User, Bell, X } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
 import { logout } from "../../redux/auth/authSlice";
@@ -31,10 +31,21 @@ export function Header() {
     },
   ];
 
+  const orderTabs = [
+    { label: "Tất cả", value: "tat-ca" },
+    { label: "Chờ gia công", value: "cho-gia-cong" },
+    { label: "Vận chuyển", value: "van-chuyen" },
+    { label: "Chờ giao hàng", value: "cho-giao-hang" },
+    { label: "Hoàn thành", value: "hoan-thanh" },
+    { label: "Đã hủy", value: "da-huy" },
+    { label: "Trả hàng/Hoàn tiền", value: "tra-hang-hoan-tien" },
+  ];
+
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { totalProduct } = useSelector((state) => state.cart);
   const { items: notifications } = useSelector((state) => state.notifications);
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
 
   const [dropDownMenu, setDropDownMenu] = useState(false);
@@ -43,6 +54,9 @@ export function Header() {
 
   const unreadCount = notifications.filter((item) => !item.read).length;
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
+  const isOrderTrackingPage = location.pathname === "/user/orders";
+  const activeOrderTab =
+    new URLSearchParams(location.search).get("tab") || "tat-ca";
 
   function toogleDropDownMeni(curr) {
     setDropDownMenu(!curr);
@@ -89,6 +103,10 @@ export function Header() {
 
   function handleMarkAllAsRead() {
     dispatch(markAllNotificationsAsRead());
+  }
+
+  function handleOrderTabClick(tabValue) {
+    navigate(`/user/orders?tab=${tabValue}`);
   }
 
   useEffect(() => {
@@ -299,18 +317,47 @@ export function Header() {
           </div>
         </div>
 
-        <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => handleNavigateItem(item)}
-              className="group relative cursor-pointer font-sans text-3xl font-medium text-gray-700 transition-colors hover:text-teal-600"
-            >
-              {item.label}
-              <span className="absolute inset-x-0 -bottom-3 h-0.5 origin-left scale-x-0 bg-teal-600 transition-transform duration-200 group-hover:scale-x-100" />
-            </button>
-          ))}
-        </nav>
+        {isOrderTrackingPage && (
+          <div className="pb-3 pt-2">
+            <div className="overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-[0_14px_30px_rgba(14,116,144,0.10)]">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7">
+                {orderTabs.map((tab) => {
+                  const isActive = activeOrderTab === tab.value;
+
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => handleOrderTabClick(tab.value)}
+                      className={`border-b-2 px-3 py-4 text-center text-sm font-medium whitespace-nowrap transition sm:px-4 sm:text-base ${
+                        isActive
+                          ? "border-teal-500 bg-gradient-to-b from-cyan-50 to-white text-teal-600"
+                          : "border-transparent text-slate-600 hover:bg-sky-50 hover:text-sky-600"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isOrderTrackingPage && (
+          <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
+            {navItems.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => handleNavigateItem(item)}
+                className="group relative cursor-pointer font-sans text-3xl font-medium text-gray-700 transition-colors hover:text-teal-600"
+              >
+                {item.label}
+                <span className="absolute inset-x-0 -bottom-3 h-0.5 origin-left scale-x-0 bg-teal-600 transition-transform duration-200 group-hover:scale-x-100" />
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
   );

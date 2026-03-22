@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { UserCircle, CheckCircle, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { appToast } from "../utils/appToast";
-import { updateProfile } from "../redux/auth/authSlice";
+import { fetchProfile, updateProfile } from "../redux/auth/authSlice";
+import {
+  extractLatestCheckoutAddress,
+  formatCheckoutAddress,
+} from "../utils/userAddress";
 
 export default function UserProfilePage() {
   const dispatch = useDispatch();
@@ -15,10 +19,20 @@ export default function UserProfilePage() {
   });
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      dispatch(fetchProfile());
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    const latestAddress = extractLatestCheckoutAddress(user);
+    const fallbackAddress = formatCheckoutAddress(latestAddress);
+
     setFormData({
       fullName: user?.fullName || "",
       phone: user?.phone || "",
-      address: user?.address || "",
+      address: user?.address || fallbackAddress || "",
     });
   }, [user]);
 
@@ -28,10 +42,13 @@ export default function UserProfilePage() {
   }
 
   function handleCancel() {
+    const latestAddress = extractLatestCheckoutAddress(user);
+    const fallbackAddress = formatCheckoutAddress(latestAddress);
+
     setFormData({
       fullName: user?.fullName || "",
       phone: user?.phone || "",
-      address: user?.address || "",
+      address: user?.address || fallbackAddress || "",
     });
     setIsEditing(false);
   }
@@ -86,7 +103,7 @@ export default function UserProfilePage() {
 
               <div className="flex min-w-0 flex-col justify-end sm:pb-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 leading-tight">
-                  <h1 className="text-3xl font-bold tracking-tight leading-none text-slate-900">
+                  <h1 className="text-3xl font-bold leading-none tracking-tight text-slate-900">
                     {user?.fullName || "Chưa cập nhật"}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-600">
@@ -95,7 +112,7 @@ export default function UserProfilePage() {
                   </span>
                 </div>
 
-                <p className="mt-1.5 text-base leading-snug text-slate-500 break-all">
+                <p className="mt-1.5 break-all text-base leading-snug text-slate-500">
                   {user?.email || "Chưa cập nhật email"}
                 </p>
               </div>
@@ -122,7 +139,7 @@ export default function UserProfilePage() {
 
             <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
               <p className="text-sm font-medium text-slate-500">Email</p>
-              <p className="mt-3 text-lg font-semibold text-slate-900 break-all">
+              <p className="mt-3 break-all text-lg font-semibold text-slate-900">
                 {user?.email || "Chưa cập nhật"}
               </p>
             </div>

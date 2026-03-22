@@ -18,6 +18,7 @@ import PreOrderPage from "../pages/PreOrderPage";
 import AdminDashBoard from "../pages/AdminDashBoard";
 import CustomGlassesPage from "../pages/CustomGlassesPage";
 import VisionTestPage from "../pages/VisionTestPage";
+import OrderTrackingPage from "../pages/OrderTrackingPage";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -72,6 +73,7 @@ function AnimatedRoutes() {
 
             {/* User Route */}
             <Route path="/user/profile" element={<UserProfilePage />}></Route>
+            <Route path="/user/orders" element={<OrderTrackingPage />}></Route>
             <Route path="/user/cart" element={<CartPage />}></Route>
             <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
             <Route path="/user/preorder" element={<PreOrderPage />} />
