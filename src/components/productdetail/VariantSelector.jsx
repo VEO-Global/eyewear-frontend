@@ -1,4 +1,5 @@
 import React from "react";
+import { isPreorderProduct } from "../../utils/productCatalog";
 
 const colorMap = {
   "Matte Black": "#1a1a1a",
@@ -20,12 +21,13 @@ export function VariantSelector({
 }) {
   const colors = [...new Set(variants.map((v) => v.color))];
   const sizes = [...new Set(variants.map((v) => v.size))];
+  const isPreorder = isPreorderProduct(selectedProduct);
 
   return (
     <div className="flex flex-col gap-8 py-8">
       <div className="flex justify-between">
         <div className="flex flex-col gap-4">
-          <label className="text-sm font-medium text-gray-900 uppercase tracking-wider">
+          <label className="text-sm font-medium uppercase tracking-wider text-gray-900">
             Kích cỡ
           </label>
 
@@ -35,22 +37,13 @@ export function VariantSelector({
                 <button
                   key={size}
                   onClick={() => onSizeChange(size)}
-                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all border cursor-pointer ${
+                  className={`cursor-pointer rounded-lg border px-6 py-3 text-sm font-medium transition-all ${
                     selectedSize === size
-                      ? "bg-black"
-                      : "bg-white text-black border-gray-300 hover:border-black"
+                      ? "border-slate-900 bg-slate-100 text-slate-900 shadow-sm"
+                      : "border-gray-300 bg-white text-black hover:border-black"
                   }`}
                 >
-                  <span
-                    className={`${
-                      selectedSize === size
-                        ? "text-white"
-                        : "bg-white text-black border-gray-300 hover:border-black"
-                    }`}
-                  >
-                    {" "}
-                    {size}
-                  </span>
+                  {size}
                 </button>
               ))}
             </>
@@ -58,25 +51,28 @@ export function VariantSelector({
         </div>
 
         <div className="flex flex-col">
-          <label className="text-sm font-medium text-gray-900 uppercase tracking-wider px-5">
-            Số Lượng
+          <label className="px-5 text-sm font-medium uppercase tracking-wider text-gray-900">
+            Số lượng
           </label>
           <span
             className={`mt-6 px-6 ${
-              selectedVariant?.stockQuantity === 0 ? "text-red-700" : ""
+              !isPreorder && Number(selectedVariant?.stockQuantity || 0) === 0
+                ? "text-red-700"
+                : ""
             }`}
           >
-            {selectedVariant?.stockQuantity === 0
-              ? "Hết hàng"
-              : selectedVariant?.stockQuantity}
+            {isPreorder
+              ? "Nhận đặt trước"
+              : Number(selectedVariant?.stockQuantity || 0) === 0
+                ? "Hết hàng"
+                : selectedVariant?.stockQuantity}
           </span>
         </div>
       </div>
 
-      {/* Color Selection */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-900 uppercase tracking-wider">
+          <label className="text-sm font-medium uppercase tracking-wider text-gray-900">
             Màu sắc
           </label>
           <span className="text-sm text-gray-500">{selectedColor}</span>
@@ -87,10 +83,10 @@ export function VariantSelector({
             <button
               key={color}
               onClick={() => onColorChange(color)}
-              className={`relative w-12 h-12 rounded-full border-2 transition-all duration-200 cursor-pointer ${
+              className={`relative h-12 w-12 cursor-pointer rounded-full border-2 transition-all duration-200 ${
                 selectedColor === color
-                  ? "border-black scale-125"
-                  : "border-gray-300 hover:border-gray-500 hover:scale-110"
+                  ? "scale-125 border-black"
+                  : "border-gray-300 hover:scale-110 hover:border-gray-500"
               }`}
               style={{
                 backgroundColor: colorMap[color] || "#cccccc",
@@ -99,7 +95,7 @@ export function VariantSelector({
             >
               {selectedColor === color && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full border-2 border-white pointer-events-none" />
+                  <div className="pointer-events-none h-6 w-6 rounded-full border-2 border-white" />
                 </div>
               )}
             </button>

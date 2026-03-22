@@ -2,8 +2,8 @@ import React from "react";
 import { ArrowRight, Calendar } from "lucide-react";
 import { Button } from "../common/Button";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
+import { appToast } from "../../utils/appToast";
 
 export function HeroSection() {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export function HeroSection() {
       return;
     }
 
-    toast.warning("Vui lòng đăng nhập để đặt trước");
+    appToast.warning("Vui lòng đăng nhập để đặt trước");
     navigate("/auth/login");
   }
 

@@ -1,30 +1,38 @@
-import React from "react";
+import React, { useEffect } from "react";
 /* eslint-disable no-unused-vars */
 import { Key, Mail } from "lucide-react";
 import { Button, Checkbox, Form, Input } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchProfile, loginUser } from "../redux/auth/authSlice";
 import { useDispatch, useSelector } from "react-redux";
-import { useEffect } from "react";
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 
 export default function LoginnForm() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isAuthenticated, notificationMessage, notificationType } =
-    useSelector((state) => state.auth);
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   async function handleLogin(values) {
     const result = await dispatch(loginUser(values));
 
     if (loginUser.fulfilled.match(result)) {
-      dispatch(fetchProfile());
-      toast.success("Đăng nhập thành công");
-      navigate("/");
+      const profileResult = await dispatch(fetchProfile());
+
+      if (fetchProfile.fulfilled.match(profileResult)) {
+        appToast.success("Đăng nhập thành công");
+        navigate("/");
+        return;
+      }
+
+      appToast.error(
+        profileResult.payload ||
+          "Đăng nhập thành công nhưng không tải được hồ sơ người dùng."
+      );
+      return;
     }
 
     if (loginUser.rejected.match(result)) {
-      toast.error(result.payload || "Sai email hoặc mật khẩu");
+      appToast.error(result.payload || "Sai email hoặc mật khẩu");
     }
   }
 
@@ -33,6 +41,7 @@ export default function LoginnForm() {
       navigate("/");
     }
   }, [isAuthenticated, navigate]);
+
   return (
     <div
       className="bg-white/80 backdrop-blur
@@ -45,7 +54,6 @@ export default function LoginnForm() {
         className="mt-10 space-y-6"
         onFinish={handleLogin}
       >
-        {/* EMAIL */}
         <Form.Item
           label={
             <span className="text-lg font-medium text-gray-900">
@@ -62,8 +70,8 @@ export default function LoginnForm() {
             },
           ]}
         >
-          <div className="flex h-11 rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-teal-500">
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
+          <div className="flex h-11 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-teal-500">
+            <div className="flex w-1/5 items-center justify-center bg-gray-50 text-gray-400">
               <Mail />
             </div>
             <Input
@@ -73,7 +81,6 @@ export default function LoginnForm() {
           </div>
         </Form.Item>
 
-        {/* PASSWORD */}
         <Form.Item
           label={
             <span className="text-lg font-medium text-gray-900">Mật khẩu</span>
@@ -81,8 +88,8 @@ export default function LoginnForm() {
           name="password"
           rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
         >
-          <div className="flex h-11 rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-teal-500">
-            <div className="w-1/5 flex items-center justify-center bg-gray-50 text-gray-400">
+          <div className="flex h-11 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-teal-500">
+            <div className="flex w-1/5 items-center justify-center bg-gray-50 text-gray-400">
               <Key />
             </div>
             <Input.Password
@@ -92,7 +99,6 @@ export default function LoginnForm() {
           </div>
         </Form.Item>
 
-        {/* REMEMBER + FORGOT */}
         <div className="flex items-center justify-between">
           <Form.Item name="remember" valuePropName="checked" noStyle>
             <Checkbox className="text-sm">Ghi nhớ đăng nhập</Checkbox>
@@ -106,20 +112,16 @@ export default function LoginnForm() {
           </a>
         </div>
 
-        {/* SUBMIT */}
         <Form.Item>
           <Button
             htmlType="submit"
-            className="
-        w-full flex items-center justify-center gap-2
-      "
+            className="w-full flex items-center justify-center gap-2"
             style={{ backgroundColor: "black", height: "44px" }}
           >
-            <span className="text-lg text-white font-medium"> Đăng nhập →</span>
+            <span className="text-lg font-medium text-white">Đăng nhập →</span>
           </Button>
         </Form.Item>
 
-        {/* DIVIDER */}
         <div className="relative my-8">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-200" />
@@ -131,22 +133,20 @@ export default function LoginnForm() {
           </div>
         </div>
 
-        {/* SOCIAL */}
         <div className="grid grid-cols-2 gap-3">
-          <Button className="h-11 border border-gray-300 rounded-lg">
+          <Button className="h-11 rounded-lg border border-gray-300">
             Google
           </Button>
-          <Button className="h-11 border border-gray-300 rounded-lg">
+          <Button className="h-11 rounded-lg border border-gray-300">
             GitHub
           </Button>
         </div>
 
-        {/* REGISTER */}
         <p className="text-center text-sm text-gray-500">
           Chưa có tài khoản?{" "}
           <Link
             to="/auth/register"
-            className="text-teal-600 font-medium hover:underline"
+            className="font-medium text-teal-600 hover:underline"
           >
             Tạo tài khoản mới
           </Link>
