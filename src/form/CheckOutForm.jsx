@@ -173,14 +173,13 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
         label="Đơn thuốc"
         name="prescriptionOption"
         rules={[{ required: true }]}
-        extra="Nếu chọn có đơn thuốc, hệ thống sẽ hiện thêm phần chọn loại tròng và nhập toa thuốc."
       >
         <div className="grid grid-cols-2 gap-4">
           {[
             {
               value: "without_prescription",
               title: "Không có đơn thuốc",
-              description: "Đi thẳng tới thanh toán",
+              description: "Tiếp tục với đơn hàng cơ bản",
             },
             {
               value: "with_prescription",

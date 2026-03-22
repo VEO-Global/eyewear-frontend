@@ -23,7 +23,6 @@ import { decreaseVariantStock } from "../redux/products/producSlice";
 import { appToast } from "../utils/appToast";
 import {
   CHECKOUT_LENS_SELECTION_STORAGE_KEY,
-  FALLBACK_LENS_PRODUCTS,
 } from "../constants/lensProducts";
 
 const SHIPPING_COST = 30000;
@@ -383,7 +382,7 @@ export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const paymentStep = searchParams.get("step");
   const [form] = Form.useForm();
-  const [lensProducts, setLensProducts] = useState(FALLBACK_LENS_PRODUCTS);
+  const [lensProducts, setLensProducts] = useState([]);
   const [lensLoading, setLensLoading] = useState(false);
 
   useEffect(() => {
@@ -403,7 +402,7 @@ export default function CheckoutPage() {
         }
       } catch {
         if (isMounted) {
-          setLensProducts(FALLBACK_LENS_PRODUCTS);
+          setLensProducts([]);
         }
       } finally {
         if (isMounted) {

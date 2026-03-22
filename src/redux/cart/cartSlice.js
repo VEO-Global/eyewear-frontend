@@ -45,11 +45,12 @@ const cartSlice = createSlice({
     addItem(state, action) {
       const product = action.payload;
       const exist = state.cart.find((item) => item.variantID === product.variantID);
+      const quantityToAdd = Math.max(1, Number(product.cartQuantity) || 1);
 
       if (exist) {
-        exist.quantity += 1;
+        exist.quantity += quantityToAdd;
       } else {
-        state.cart.push({ ...product, quantity: 1 });
+        state.cart.push({ ...product, quantity: quantityToAdd });
       }
 
       calculateCart(state);

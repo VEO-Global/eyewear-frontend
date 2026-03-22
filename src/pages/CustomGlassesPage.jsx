@@ -8,13 +8,10 @@ import {
   Glasses,
   PackageCheck,
 } from "lucide-react";
-import { Button, Form, Input, Radio, Select, Spin } from "antd";
+import { Button, Form, Input, Select, Spin } from "antd";
 import api from "../configs/config-axios";
 import AddressSelector from "../components/checkout/AddressSelector";
 import PrescriptionSection from "../components/prescription/PrescriptionSection";
-import {
-  FALLBACK_LENS_PRODUCTS,
-} from "../constants/lensProducts";
 import { appToast } from "../utils/appToast";
 
 const STEP_KEYS = {
@@ -108,7 +105,7 @@ function InfoCard({ title, description, tone }) {
 export default function CustomGlassesPage() {
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(STEP_KEYS.SHIPPING);
-  const [lensProducts, setLensProducts] = useState(FALLBACK_LENS_PRODUCTS);
+  const [lensProducts, setLensProducts] = useState([]);
   const [lensLoading, setLensLoading] = useState(false);
 
   const prescriptionOption =
@@ -141,7 +138,7 @@ export default function CustomGlassesPage() {
         }
       } catch {
         if (isMounted) {
-          setLensProducts(FALLBACK_LENS_PRODUCTS);
+          setLensProducts([]);
         }
       } finally {
         if (isMounted) {
@@ -386,37 +383,59 @@ export default function CustomGlassesPage() {
                   label="Bạn có đơn thuốc không?"
                   name="prescriptionOption"
                   rules={[{ required: true }]}
-                  extra="Nếu chọn có đơn thuốc, bước tiếp theo sẽ hiện giao diện nhập toa thuốc và chọn tròng kính."
                 >
-                  <Radio.Group className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Radio.Button
-                      value="without_prescription"
-                      className="!h-auto !rounded-2xl !border !border-slate-200 !bg-white !px-5 !py-4 !text-left !shadow-sm before:!hidden"
-                    >
-                      <div>
-                        <p className="text-base font-semibold text-slate-900">
-                          Không có đơn thuốc
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Bỏ qua bước nhập toa và đi thẳng tới thanh toán.
-                        </p>
-                      </div>
-                    </Radio.Button>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      {
+                        value: "without_prescription",
+                        title: "Không có đơn thuốc",
+                        description: "Tiếp tục với đơn hàng cơ bản",
+                      },
+                      {
+                        value: "with_prescription",
+                        title: "Có đơn thuốc",
+                        description: "Chọn loại tròng và nhập toa thuốc",
+                      },
+                    ].map((option) => {
+                      const isSelected = prescriptionOption === option.value;
 
-                    <Radio.Button
-                      value="with_prescription"
-                      className="!h-auto !rounded-2xl !border !border-slate-200 !bg-white !px-5 !py-4 !text-left !shadow-sm before:!hidden"
-                    >
-                      <div>
-                        <p className="text-base font-semibold text-slate-900">
-                          Có đơn thuốc
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Sẽ chuyển sang bước nhập toa và chọn tròng kính.
-                        </p>
-                      </div>
-                    </Radio.Button>
-                  </Radio.Group>
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            form.setFieldValue("prescriptionOption", option.value)
+                          }
+                          className={`flex min-h-[168px] w-full flex-col items-center justify-start rounded-[28px] border px-5 py-5 text-center shadow-sm transition ${
+                            isSelected
+                              ? "border-teal-400 bg-teal-50/70"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 items-center justify-center rounded-full border-2 transition ${
+                              isSelected
+                                ? "border-teal-500 bg-white"
+                                : "border-slate-300 bg-white"
+                            }`}
+                          >
+                            <span
+                              className={`h-3 w-3 rounded-full transition ${
+                                isSelected ? "bg-teal-500" : "bg-transparent"
+                              }`}
+                            />
+                          </span>
+
+                          <p className="mt-5 text-xl font-semibold text-slate-900">
+                            {option.title}
+                          </p>
+                          <p className="mt-4 max-w-[220px] text-sm leading-6 text-slate-500">
+                            {option.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Form.Item>
 
                 <div className="pt-4">

@@ -1,11 +1,11 @@
-import { useEffect } from "react";
-import { Button, Form, Input, InputNumber, Radio } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Form, Input, InputNumber, Select } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useDispatch, useSelector } from "react-redux";
 import api from "../configs/config-axios";
 import AddressSelector from "../components/checkout/AddressSelector";
-import PrescriptionSection from "../components/prescription/PrescriptionSection";
 import { fetchProfile } from "../redux/auth/authSlice";
+import { addItem } from "../redux/cart/cartSlice";
 import { appToast } from "../utils/appToast";
 import {
   extractLatestCheckoutAddress,
@@ -40,8 +40,43 @@ export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const orderType = Form.useWatch("orderType", form);
-  const currentVariant = selectedProduct?.variants?.[0];
+  const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
+
+  const variants = selectedProduct?.variants || [];
+  const colorOptions = useMemo(
+    () =>
+      [...new Set(variants.map((variant) => variant.color).filter(Boolean))].map(
+        (color) => ({
+          label: color,
+          value: color,
+        })
+      ),
+    [variants]
+  );
+
+  const sizeOptions = useMemo(() => {
+    const filteredVariants = selectedColor
+      ? variants.filter((variant) => variant.color === selectedColor)
+      : variants;
+
+    return [...new Set(filteredVariants.map((variant) => variant.size).filter(Boolean))].map(
+      (size) => ({
+        label: size,
+        value: size,
+      })
+    );
+  }, [selectedColor, variants]);
+
+  const currentVariant = useMemo(
+    () =>
+      variants.find(
+        (variant) =>
+          (!selectedColor || variant.color === selectedColor) &&
+          (!selectedSize || variant.size === selectedSize)
+      ) || null,
+    [selectedColor, selectedSize, variants]
+  );
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -81,15 +116,42 @@ export default function PreorderForm({ selectedProduct }) {
     }
   }, [form, user]);
 
+  useEffect(() => {
+    if (!variants.length) {
+      setSelectedColor("");
+      setSelectedSize("");
+      return;
+    }
+
+    const firstVariant = variants[0];
+    setSelectedColor(firstVariant?.color || "");
+    setSelectedSize(firstVariant?.size || "");
+  }, [variants]);
+
+  useEffect(() => {
+    if (!selectedColor) {
+      return;
+    }
+
+    const hasSelectedSize = variants.some(
+      (variant) => variant.color === selectedColor && variant.size === selectedSize
+    );
+
+    if (!hasSelectedSize) {
+      const nextVariant = variants.find((variant) => variant.color === selectedColor);
+      setSelectedSize(nextVariant?.size || "");
+    }
+  }, [selectedColor, selectedSize, variants]);
+
   const handleSubmit = async (values) => {
-    if (!currentVariant) {
-      appToast.warning("Vui lòng chọn sản phẩm trước khi đặt đơn");
+    if (!selectedProduct || !currentVariant) {
+      appToast.warning("Vui lòng chọn sản phẩm, màu sắc và size trước khi đặt trước");
       return;
     }
 
     const selectedAddress = values.shippingAddress || {};
     const requestBody = {
-      orderType: values.orderType,
+      orderType: "PREORDER_NORMAL",
       receiverName: values.receiverName,
       phoneNumber: values.phoneNumber,
       province: selectedAddress.provinceName || "",
@@ -105,46 +167,44 @@ export default function PreorderForm({ selectedProduct }) {
       ],
     };
 
-    if (values.orderType === "PRESCRIPTION") {
-      requestBody.prescription = {
-        prescriptionImageUrl:
-          values.prescription?.prescriptionImageUrl || undefined,
-        sphereOd: values.prescription?.sphereOd || undefined,
-        sphereOs: values.prescription?.sphereOs || undefined,
-        cylinderOd: values.prescription?.cylinderOd || undefined,
-        cylinderOs: values.prescription?.cylinderOs || undefined,
-        axisOd: values.prescription?.axisOd || undefined,
-        axisOs: values.prescription?.axisOs || undefined,
-        pd: values.prescription?.pd || undefined,
-      };
-    }
-
     await api.post("/orders", requestBody);
     await dispatch(fetchProfile());
 
-    appToast.success(
-      values.orderType === "PRESCRIPTION"
-        ? "Đã gửi đơn kính có độ thành công!"
-        : "Đặt trước thành công!"
+    dispatch(
+      addItem({
+        productID: selectedProduct.id,
+        variantID: currentVariant.id,
+        variantPrice: currentVariant.price,
+        color: currentVariant.color || selectedColor,
+        size: currentVariant.size || selectedSize,
+        name: selectedProduct.name,
+        brand: selectedProduct.brand,
+        description: selectedProduct.description,
+        material: selectedProduct.material,
+        imgUrl: selectedProduct.imageUrl || selectedProduct.image,
+        gender: selectedProduct.gender,
+        cartQuantity: values.quantity,
+      })
     );
 
+    appToast.success("Đặt trước thành công và đã thêm sản phẩm vào giỏ hàng");
+
     form.setFieldsValue({
-      orderType: values.orderType,
-      prescriptionMethod: values.orderType === "PRESCRIPTION" ? "image" : undefined,
       quantity: 1,
       receiverName: undefined,
       phoneNumber: undefined,
       shippingAddress: undefined,
       note: undefined,
-      prescription: undefined,
     });
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-6">
+    <div className="mx-auto max-w-3xl py-2">
       {!selectedProduct && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          Hãy chọn một sản phẩm ở cột bên trái trước khi điền form đặt đơn.
+        <div className="mb-8 rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
+          Hãy chọn một sản phẩm ở cột bên trái trước khi điền form đặt trước.
+          Khi đã chọn mẫu kính, bạn sẽ thấy đầy đủ thông tin để xác nhận nhanh
+          hơn.
         </div>
       )}
 
@@ -153,103 +213,124 @@ export default function PreorderForm({ selectedProduct }) {
         layout="vertical"
         onFinish={handleSubmit}
         initialValues={{
-          orderType: "PREORDER_NORMAL",
-          prescriptionMethod: "image",
           quantity: 1,
         }}
+        className="space-y-8"
       >
-        <Form.Item
-          label="Loại đơn hàng"
-          name="orderType"
-          rules={[{ required: true }]}
-        >
-          <Radio.Group
-            optionType="button"
-            buttonStyle="solid"
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-slate-900">
+              Thông tin giao hàng
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              EyeCare sẽ dùng thông tin này để liên hệ xác nhận và thông báo khi
+              sản phẩm sẵn sàng.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Form.Item
+              label="Họ và tên"
+              name="receiverName"
+              rules={[{ required: true, message: "Vui lòng nhập họ và tên" }]}
+              className="mb-0"
+            >
+              <Input size="large" placeholder="Nguyễn Văn A" />
+            </Form.Item>
+
+            <Form.Item
+              label="Số điện thoại"
+              name="phoneNumber"
+              rules={[
+                { required: true, message: "Vui lòng nhập số điện thoại" },
+                {
+                  pattern: /^[0-9]{10,11}$/,
+                  message: "Số điện thoại chưa đúng định dạng",
+                },
+              ]}
+              className="mb-0"
+            >
+              <Input size="large" placeholder="0901234567" />
+            </Form.Item>
+          </div>
+
+          <Form.Item
+            label="Địa chỉ giao hàng"
+            name="shippingAddress"
+            rules={[{ validator: validateShippingAddress }]}
+            className="mb-0 mt-5"
           >
-            <Radio.Button
-              value="PREORDER_NORMAL"
-              className="!h-auto !rounded-2xl !border !border-slate-200 !bg-white !px-5 !py-4 !text-left !shadow-sm before:!hidden"
-            >
-              <div>
-                <p className="text-base font-semibold text-slate-900">Kính không độ</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Đặt trước mẫu kính và hoàn tất đơn hàng như bình thường.
-                </p>
-              </div>
-            </Radio.Button>
+            <AddressSelector />
+          </Form.Item>
 
-            <Radio.Button
-              value="PRESCRIPTION"
-              className="!h-auto !rounded-2xl !border !border-slate-200 !bg-white !px-5 !py-4 !text-left !shadow-sm before:!hidden"
-            >
-              <div>
-                <p className="text-base font-semibold text-slate-900">Kính có độ</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Cung cấp toa thuốc để EyeCare cắt lắp kính theo thông số mắt.
-                </p>
-              </div>
-            </Radio.Button>
-          </Radio.Group>
-        </Form.Item>
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1fr_140px]">
+            <Form.Item label="Màu sắc" className="mb-0">
+              <Select
+                size="large"
+                value={selectedColor || undefined}
+                onChange={setSelectedColor}
+                placeholder="Chọn màu sắc"
+                options={colorOptions}
+                disabled={!selectedProduct}
+              />
+            </Form.Item>
 
-        <Form.Item
-          label="Họ và tên"
-          name="receiverName"
-          rules={[{ required: true, message: "Vui lòng nhập họ và tên" }]}
-        >
-          <Input size="large" placeholder="Nguyễn Văn A" />
-        </Form.Item>
+            <Form.Item label="Kích thước" className="mb-0">
+              <Select
+                size="large"
+                value={selectedSize || undefined}
+                onChange={setSelectedSize}
+                placeholder="Chọn size"
+                options={sizeOptions}
+                disabled={!selectedProduct}
+              />
+            </Form.Item>
 
-        <Form.Item
-          label="Số điện thoại"
-          name="phoneNumber"
-          rules={[
-            { required: true, message: "Vui lòng nhập số điện thoại" },
-            {
-              pattern: /^[0-9]{10,11}$/,
-              message: "Số điện thoại chưa đúng định dạng",
-            },
-          ]}
-        >
-          <Input size="large" placeholder="0901234567" />
-        </Form.Item>
+            <Form.Item label="Số lượng" name="quantity" className="mb-0">
+              <InputNumber min={1} className="w-full" size="large" />
+            </Form.Item>
+          </div>
 
-        <Form.Item
-          label="Địa chỉ giao hàng"
-          name="shippingAddress"
-          rules={[{ validator: validateShippingAddress }]}
-        >
-          <AddressSelector />
-        </Form.Item>
+          {currentVariant ? (
+            <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-4 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">
+                Biến thể đã chọn: {currentVariant.color || selectedColor} /{" "}
+                {currentVariant.size || selectedSize}
+              </p>
+              <p className="mt-2">
+                Giá dự kiến:{" "}
+                <span className="font-semibold text-slate-900">
+                  {Number(currentVariant.price || 0).toLocaleString("vi-VN")}đ
+                </span>
+              </p>
+            </div>
+          ) : null}
 
-        <Form.Item label="Số lượng" name="quantity">
-          <InputNumber min={1} className="w-full" />
-        </Form.Item>
+          <Form.Item label="Ghi chú" name="note" className="mb-0 mt-5">
+            <Input.TextArea
+              rows={3}
+              placeholder="Ví dụ: Gọi trước khi giao hàng, giao giờ hành chính..."
+            />
+          </Form.Item>
+        </div>
 
-        <Form.Item label="Ghi chú" name="note">
-          <Input.TextArea
-            rows={3}
-            placeholder="Ví dụ: Gọi trước khi giao hàng, giao giờ hành chính..."
-          />
-        </Form.Item>
+        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-slate-500">
+            {currentVariant
+              ? "Khi xác nhận đặt trước, sản phẩm cũng sẽ được thêm vào giỏ hàng của bạn."
+              : "Chọn một sản phẩm cùng màu và size trước để tiếp tục."}
+          </p>
 
-        {orderType === "PRESCRIPTION" ? <PrescriptionSection form={form} /> : null}
-
-        <Form.Item className="mb-0 mt-8">
           <Button
             type="primary"
             htmlType="submit"
             disabled={!currentVariant}
             size="large"
-            className="h-12 rounded-2xl px-6"
+            className="h-12 w-full rounded-2xl px-8 sm:w-auto"
           >
-            {orderType === "PRESCRIPTION"
-              ? "Tiếp tục đặt kính có độ"
-              : "Xác nhận đặt trước"}
+            Xác nhận đặt trước
           </Button>
-        </Form.Item>
+        </div>
       </Form>
     </div>
   );
