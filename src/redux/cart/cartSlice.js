@@ -1,5 +1,28 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { logout } from "../auth/authSlice";
+import { fetchProfile, logout } from "../auth/authSlice";
+
+function getCartStorageKey(userId) {
+  return `cart:${userId}`;
+}
+
+function getStoredCart(userId) {
+  if (!userId) {
+    return [];
+  }
+
+  try {
+    const storedCart = localStorage.getItem(getCartStorageKey(userId));
+
+    if (!storedCart) {
+      return [];
+    }
+
+    const parsedCart = JSON.parse(storedCart);
+    return Array.isArray(parsedCart) ? parsedCart : [];
+  } catch {
+    return [];
+  }
+}
 
 const initialState = {
   cart: [],
@@ -9,8 +32,10 @@ const initialState = {
 
 function calculateCart(state) {
   state.totalProduct = state.cart.reduce((total, item) => total + item.quantity, 0);
-
-  state.totalPrice = state.cart.reduce((total, item) => total + item.variantPrice * item.quantity, 0);
+  state.totalPrice = state.cart.reduce(
+    (total, item) => total + item.variantPrice * item.quantity,
+    0
+  );
 }
 
 const cartSlice = createSlice({
@@ -27,28 +52,17 @@ const cartSlice = createSlice({
         state.cart.push({ ...product, quantity: 1 });
       }
 
-      state.totalProduct += 1;
-      state.totalPrice += product.price;
-
       calculateCart(state);
     },
 
     removeItem(state, action) {
       const variantId = action.payload;
-
-      const item = state.cart.find((i) => i.variantID === variantId);
-
-      if (item) {
-        state.totalProduct -= item.quantity;
-        state.totalPrice -= item.variantPrice * item.quantity;
-      }
-
       state.cart = state.cart.filter((item) => item.variantID !== variantId);
+      calculateCart(state);
     },
 
     updateQuantity(state, action) {
       const { variantId, type } = action.payload;
-
       const item = state.cart.find((i) => i.variantID === variantId);
 
       if (!item) return;
@@ -66,10 +80,17 @@ const cartSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    builder.addCase(logout, () => initialState);
+    builder
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.cart = getStoredCart(action.payload?.id);
+        calculateCart(state);
+      })
+      .addCase(logout, () => initialState);
   },
 });
 
 export const { addItem, removeItem, updateQuantity, clearCart } = cartSlice.actions;
+
+export { getCartStorageKey };
 
 export default cartSlice.reducer;

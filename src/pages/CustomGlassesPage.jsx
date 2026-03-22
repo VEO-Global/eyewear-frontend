@@ -1,11 +1,11 @@
 import { Form, Input, Select, Button, Checkbox } from "antd";
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 
 export default function CustomGlassesPage() {
   const [form] = Form.useForm();
 
   function handleSubmit() {
-    toast.success("Yêu cầu làm kính đã được xác nhận");
+    appToast.success("Yêu cầu làm kính đã được xác nhận");
     form.resetFields();
   }
 

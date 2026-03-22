@@ -5,7 +5,7 @@ import React, { useEffect, forwardRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { registerUser } from "../redux/auth/authSlice";
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 
 const CustomInput = forwardRef((props, ref) => {
   const { id, value, onChange, onBlur, icon, isPassword, placeholder, type } =
@@ -60,11 +60,11 @@ export default function RegisterForm() {
 
   useEffect(() => {
     if (notificationType === "success") {
-      toast.success(notificationMessage || "Đăng ký thành công!");
+      appToast.success(notificationMessage || "Đăng ký thành công!");
       navigate("/auth/login");
     }
     if (notificationType === "error") {
-      toast.error(
+      appToast.error(
         typeof notificationMessage === "string"
           ? notificationMessage
           : "Đăng ký thất bại!",

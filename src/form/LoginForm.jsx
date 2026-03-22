@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { fetchProfile, loginUser } from "../redux/auth/authSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 
 export default function LoginnForm() {
   const dispatch = useDispatch();
@@ -19,12 +19,12 @@ export default function LoginnForm() {
 
     if (loginUser.fulfilled.match(result)) {
       dispatch(fetchProfile());
-      toast.success("Đăng nhập thành công");
+      appToast.success("Đăng nhập thành công");
       navigate("/");
     }
 
     if (loginUser.rejected.match(result)) {
-      toast.error(result.payload || "Sai email hoặc mật khẩu");
+      appToast.error(result.payload || "Sai email hoặc mật khẩu");
     }
   }
 

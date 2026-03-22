@@ -1,15 +1,79 @@
 import React from "react";
 import { Form, Input, Button } from "antd";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { appToast } from "../utils/appToast";
 import AddressSelector from "../components/checkout/AddressSelector";
+import api from "../configs/config-axios";
+import { clearCart } from "../redux/cart/cartSlice";
+
+const validateShippingAddress = (_, value) => {
+  if (!value || typeof value !== "object") {
+    return Promise.reject(new Error("Vui lòng nhập địa chỉ giao hàng"));
+  }
+
+  if (typeof value.provinceCode !== "number" || !value.provinceName) {
+    return Promise.reject(new Error("Vui lòng chọn tỉnh/thành"));
+  }
+
+  if (typeof value.districtCode !== "number" || !value.districtName) {
+    return Promise.reject(new Error("Vui lòng chọn quận/huyện"));
+  }
+
+  if (typeof value.wardCode !== "number" || !value.wardName) {
+    return Promise.reject(new Error("Vui lòng chọn phường/xã"));
+  }
+
+  if (!value.shippingAddress?.trim()) {
+    return Promise.reject(new Error("Vui lòng nhập địa chỉ chi tiết"));
+  }
+
+  return Promise.resolve();
+};
 
 export default function CheckOutForm() {
   const [form] = Form.useForm();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { cart } = useSelector((state) => state.cart);
 
-  const handleSubmit = (values) => {
-    console.log("Checkout Data:", values);
+  const handleSubmit = async (values) => {
+    if (!cart.length) {
+      appToast.warning("Giỏ hàng của bạn đang trống.");
+      return;
+    }
 
-    // Sau này bạn sẽ gọi API
-    // axios.post("/orders", values)
+    const selectedAddress = values.shippingAddress || {};
+    const addressDetail = selectedAddress.shippingAddress?.trim() || "";
+
+    const requestBody = {
+      orderType: "NORMAL",
+      receiverName: values.receiverName,
+      phoneNumber: values.phoneNumber,
+      province: selectedAddress.provinceName || "",
+      district: selectedAddress.districtName || "",
+      ward: selectedAddress.wardName || "",
+      shippingAddress: addressDetail,
+      addressDetail,
+      note: values.note || "",
+      items: cart.map((item) => ({
+        productVariantId: item.variantID,
+        quantity: item.quantity,
+      })),
+    };
+
+    try {
+      const response = await api.post("/orders", requestBody);
+
+      dispatch(clearCart());
+      form.resetFields();
+      appToast.success(response.data?.message || "Đặt hàng thành công!");
+      navigate("/products");
+    } catch (error) {
+      appToast.error(
+        error.response?.data?.message || "Thanh toán thất bại. Vui lòng thử lại."
+      );
+    }
   };
 
   return (
@@ -20,7 +84,6 @@ export default function CheckOutForm() {
       className="space-y-4"
       style={{ border: 0 }}
     >
-      {/* Receiver Name */}
       <Form.Item
         label="Tên người nhận"
         name="receiverName"
@@ -29,7 +92,6 @@ export default function CheckOutForm() {
         <Input placeholder="Nguyễn Văn A" size="large" />
       </Form.Item>
 
-      {/* Phone Number */}
       <Form.Item
         label="Số điện thoại"
         name="phoneNumber"
@@ -44,27 +106,18 @@ export default function CheckOutForm() {
         <Input placeholder="0901234567" size="large" />
       </Form.Item>
 
-      {/* Shipping Address */}
       <Form.Item
         label="Địa chỉ giao hàng"
         name="shippingAddress"
-        rules={[{ required: true, message: "Vui lòng nhập địa chỉ giao hàng" }]}
+        rules={[{ validator: validateShippingAddress }]}
       >
-        <AddressSelector
-          onChange={(address) => {
-            form.setFieldsValue({
-              shippingAddress: address,
-            });
-          }}
-        />
+        <AddressSelector />
       </Form.Item>
 
-      {/* Note */}
       <Form.Item label="Ghi chú" name="note">
         <Input.TextArea rows={2} placeholder="Ví dụ: Giao giờ hành chính" />
       </Form.Item>
 
-      {/* Submit Button */}
       <Form.Item>
         <Button
           type="primary"

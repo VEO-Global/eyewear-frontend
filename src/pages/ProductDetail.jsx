@@ -2,11 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { ArrowBigLeft, Heart, ShoppingCart } from "lucide-react";
-import { toast } from "react-toastify";
-import {
-  decreaseVariantStock,
-  fetchProductById,
-} from "../redux/products/producSlice";
+import { appToast } from "../utils/appToast";
+import { fetchProductById } from "../redux/products/producSlice";
 import { addItem } from "../redux/cart/cartSlice";
 import { ProductGallery } from "../components/productdetail/ProductGallery";
 import { ProductInfo } from "../components/productdetail/ProductInfor";
@@ -40,7 +37,7 @@ export default function ProductDetail() {
 
   function handleAddToCart(product) {
     if (!currentVariant || currentVariant.stockQuantity <= 0) {
-      toast.warning("Sản phẩm này đã hết hàng");
+      appToast.warning("Sản phẩm này đã hết hàng");
       return;
     }
 
@@ -60,14 +57,7 @@ export default function ProductDetail() {
       })
     );
 
-    dispatch(
-      decreaseVariantStock({
-        productId: product.id,
-        variantId: currentVariant.id,
-      })
-    );
-
-    toast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
+    appToast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
   }
 
   function handleNavigateToPreoder(product) {

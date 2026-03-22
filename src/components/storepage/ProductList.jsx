@@ -26,7 +26,7 @@ export default function ProductList() {
     <section>
       <div className="max-w mx-auto px-4 sm:px-6 lg:px-8">
         {/* Filter */}
-        <FilterBar />
+        <FilterBar products={products} />
 
         {/* ================= LOADING ================= */}
         {loading && (

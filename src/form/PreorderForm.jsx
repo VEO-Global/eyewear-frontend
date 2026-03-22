@@ -1,8 +1,32 @@
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 import api from "../configs/config-axios";
 import { Button, Form, Input, InputNumber, Select } from "antd";
 import { useForm } from "antd/es/form/Form";
 import AddressSelector from "../components/checkout/AddressSelector";
+
+const validateShippingAddress = (_, value) => {
+  if (!value || typeof value !== "object") {
+    return Promise.reject(new Error("Vui lòng nhập địa chỉ giao hàng"));
+  }
+
+  if (typeof value.provinceCode !== "number" || !value.provinceName) {
+    return Promise.reject(new Error("Vui lòng chọn tỉnh/thành"));
+  }
+
+  if (typeof value.districtCode !== "number" || !value.districtName) {
+    return Promise.reject(new Error("Vui lòng chọn quận/huyện"));
+  }
+
+  if (typeof value.wardCode !== "number" || !value.wardName) {
+    return Promise.reject(new Error("Vui lòng chọn phường/xã"));
+  }
+
+  if (!value.shippingAddress?.trim()) {
+    return Promise.reject(new Error("Vui lòng nhập địa chỉ chi tiết"));
+  }
+
+  return Promise.resolve();
+};
 
 export default function PreorderForm({ selectedProduct }) {
   const [form] = useForm();
@@ -11,15 +35,22 @@ export default function PreorderForm({ selectedProduct }) {
 
   const handleSubmit = async (values) => {
     if (!currentVariant) {
-      toast.warning("Vui lòng chọn sản phẩm trước khi đặt trước");
+      appToast.warning("Vui lòng chọn sản phẩm trước khi đặt trước");
       return;
     }
+
+    const selectedAddress = values.shippingAddress || {};
+    const addressDetail = selectedAddress.shippingAddress?.trim() || "";
 
     const requestBody = {
       orderType: values.orderType,
       receiverName: values.receiverName,
       phoneNumber: values.phoneNumber,
-      shippingAddress: values.shippingAddress,
+      province: selectedAddress.provinceName || "",
+      district: selectedAddress.districtName || "",
+      ward: selectedAddress.wardName || "",
+      shippingAddress: addressDetail,
+      addressDetail,
       note: values.note,
       items: [
         {
@@ -36,7 +67,7 @@ export default function PreorderForm({ selectedProduct }) {
     }
 
     await api.post("/orders", requestBody);
-    toast.success("Đặt trước thành công!");
+    appToast.success("Đặt trước thành công!");
     form.setFieldsValue({
       orderType: values.orderType,
       quantity: 1,
@@ -99,7 +130,7 @@ export default function PreorderForm({ selectedProduct }) {
         <Form.Item
           label="Địa chỉ giao hàng"
           name="shippingAddress"
-          rules={[{ required: true, message: "Nhập địa chỉ" }]}
+          rules={[{ validator: validateShippingAddress }]}
         >
           <AddressSelector />
         </Form.Item>

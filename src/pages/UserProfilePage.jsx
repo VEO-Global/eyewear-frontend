@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { UserCircle, CheckCircle, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import { toast } from "react-toastify";
+import { appToast } from "../utils/appToast";
 import { updateProfile } from "../redux/auth/authSlice";
 
 export default function UserProfilePage() {
@@ -40,7 +40,7 @@ export default function UserProfilePage() {
     event.preventDefault();
 
     if (!user?.id) {
-      toast.error("Không tìm thấy thông tin người dùng.");
+      appToast.error("Không tìm thấy thông tin người dùng.");
       return;
     }
 
@@ -56,12 +56,12 @@ export default function UserProfilePage() {
     );
 
     if (updateProfile.fulfilled.match(result)) {
-      toast.success("Cập nhật thông tin cá nhân thành công.");
+      appToast.success("Cập nhật thông tin cá nhân thành công.");
       setIsEditing(false);
       return;
     }
 
-    toast.error(result.payload || "Cập nhật thông tin thất bại. Vui lòng thử lại.");
+    appToast.error(result.payload || "Cập nhật thông tin thất bại. Vui lòng thử lại.");
   }
 
   return (

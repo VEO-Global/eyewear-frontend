@@ -11,7 +11,7 @@ export default function CheckoutPage() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-4xl font-bold text-foreground mb-2 font-mono">
-            💵 Thanh toán
+            Thanh toán
           </h1>
           <p className="text-muted-foreground">
             Hoàn tất đơn hàng bằng cách điền thông tin giao hàng
@@ -31,18 +31,16 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="lg:col-span-1  rounded-2xl">
-            <CheckOutOrderSummary></CheckOutOrderSummary>
+          <div className="lg:col-span-1 rounded-2xl">
+            <CheckOutOrderSummary />
           </div>
         </div>
 
-        {/* Security Info */}
         <NavLink
-          className="rounded-2xl flex items-center gap-2 hover:underline"
-          to={"/products"}
-          style={{ marginTop: 20 }}
+          className="mt-5 flex items-center gap-2 rounded-2xl hover:underline"
+          to="/products"
         >
-          <ArrowBigLeft className="w-5 h-5" />
+          <ArrowBigLeft className="h-5 w-5" />
           <span>Tiếp tục xem các sản phẩm khác</span>
         </NavLink>
       </div>
