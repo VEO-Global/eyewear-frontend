@@ -24,16 +24,13 @@ import { appToast } from "../utils/appToast";
 import {
   CHECKOUT_LENS_SELECTION_STORAGE_KEY,
 } from "../constants/lensProducts";
+import {
+  appendStoredOrder,
+  createStoredOrder,
+  formatCurrency,
+} from "../utils/orderHistory";
 
 const SHIPPING_COST = 30000;
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    minimumFractionDigits: 0,
-  }).format(amount || 0);
-}
 
 function FakeQrCode() {
   const qrPattern = [
@@ -114,8 +111,10 @@ function PaymentQrStep() {
   const location = useLocation();
   const dispatch = useDispatch();
   const { cart } = useSelector((state) => state.cart);
+  const user = useSelector((state) => state.auth.user);
   const [paymentStatus, setPaymentStatus] = useState("idle");
   const hasProcessedSuccessfulPayment = useRef(false);
+  const hasSavedSuccessfulOrder = useRef(false);
 
   const storedCheckoutData = useMemo(() => {
     try {
@@ -183,6 +182,35 @@ function PaymentQrStep() {
     appToast.success("Thanh toán thành công");
     dispatch(removeSelectedItems(selectedCartItems.map((item) => item.variantID)));
   }, [dispatch, paymentStatus, selectedCartItems]);
+
+  useEffect(() => {
+    if (paymentStatus !== "success" || hasSavedSuccessfulOrder.current || !user?.id) {
+      return;
+    }
+
+    hasSavedSuccessfulOrder.current = true;
+
+    appendStoredOrder(
+      user.id,
+      createStoredOrder({
+        userId: user.id,
+        checkoutValues,
+        selectedCartItems,
+        selectedLensProduct,
+        lensPrice,
+        shippingCost: SHIPPING_COST,
+        totalAmount,
+      })
+    );
+  }, [
+    checkoutValues,
+    lensPrice,
+    paymentStatus,
+    selectedCartItems,
+    selectedLensProduct,
+    totalAmount,
+    user?.id,
+  ]);
 
   async function handleCopyCode() {
     try {
