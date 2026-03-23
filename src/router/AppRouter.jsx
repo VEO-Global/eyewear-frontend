@@ -19,6 +19,10 @@ import AdminDashBoard from "../pages/AdminDashBoard";
 import CustomGlassesPage from "../pages/CustomGlassesPage";
 import VisionTestPage from "../pages/VisionTestPage";
 import OrderTrackingPage from "../pages/OrderTrackingPage";
+import StaffOrderIntakePage from "../pages/staff/StaffOrderIntakePage";
+import StaffPrescriptionSupportPage from "../pages/staff/StaffPrescriptionSupportPage";
+import StaffOperationsHandoffPage from "../pages/staff/StaffOperationsHandoffPage";
+import StaffAfterSalesPage from "../pages/staff/StaffAfterSalesPage";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -79,6 +83,16 @@ function AnimatedRoutes() {
             <Route path="/user/preorder" element={<PreOrderPage />} />
             <Route path="/custom-glasses" element={<CustomGlassesPage />} />
             <Route path="/vision-test" element={<VisionTestPage />} />
+            <Route path="/staff/orders-intake" element={<StaffOrderIntakePage />} />
+            <Route
+              path="/staff/prescription-support"
+              element={<StaffPrescriptionSupportPage />}
+            />
+            <Route
+              path="/staff/operations-handoff"
+              element={<StaffOperationsHandoffPage />}
+            />
+            <Route path="/staff/after-sales" element={<StaffAfterSalesPage />} />
 
             {/* Admin Route */}
             <Route path="/admin/dashboard" element={<AdminDashBoard />}></Route>

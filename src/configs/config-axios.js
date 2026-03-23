@@ -1,7 +1,25 @@
 import axios from "axios";
 
+function normalizeApiBaseUrl(rawBaseUrl) {
+  const fallbackBaseUrl = "http://localhost:8080/api";
+
+  if (!rawBaseUrl || typeof rawBaseUrl !== "string") {
+    return fallbackBaseUrl;
+  }
+
+  const normalizedBaseUrl = rawBaseUrl.trim().replace(/\/+$/, "");
+
+  if (!normalizedBaseUrl) {
+    return fallbackBaseUrl;
+  }
+
+  return normalizedBaseUrl.endsWith("/api")
+    ? normalizedBaseUrl
+    : `${normalizedBaseUrl}/api`;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
+  baseURL: normalizeApiBaseUrl(import.meta.env.VITE_API_URL),
   headers: {
     "Content-Type": "application/json",
   },

@@ -1,8 +1,9 @@
 /* eslint-disable no-unused-vars */
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
 
 const PROFILE_ADDRESS_STORAGE_KEY = "profile-address-by-user";
+const FALLBACK_AUTH_ERROR_MESSAGE = "Đăng nhập thất bại. Vui lòng thử lại.";
 
 const initialState = {
   user: null,
@@ -37,6 +38,117 @@ function getErrorMessage(error, fallbackMessage) {
   }
 
   return fallbackMessage;
+}
+
+function decodeJwtPayload(token) {
+  if (!token || typeof token !== "string") {
+    return null;
+  }
+
+  const tokenParts = token.split(".");
+
+  if (tokenParts.length < 2) {
+    return null;
+  }
+
+  try {
+    const normalizedPayload = tokenParts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = normalizedPayload.padEnd(
+      normalizedPayload.length + ((4 - (normalizedPayload.length % 4)) % 4),
+      "="
+    );
+    const decodedPayload = atob(paddedPayload);
+
+    return JSON.parse(decodedPayload);
+  } catch {
+    return null;
+  }
+}
+
+function buildSessionUserFromToken(token) {
+  const payload = decodeJwtPayload(token);
+
+  if (!payload) {
+    return null;
+  }
+
+  const email = payload.sub ?? null;
+  const emailName = typeof email === "string" ? email.split("@")[0] : "";
+  const normalizedDisplayName = emailName
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  return {
+    email,
+    role: payload.role ?? null,
+    fullName: normalizedDisplayName || email || "Tài khoản",
+    phone: null,
+    isActive: null,
+  };
+}
+
+function normalizeIsActive(user) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  const candidateValues = [user.isActive, user.is_active, user.active];
+
+  for (const value of candidateValues) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    if (value === 1 || value === "1" || value === "true") {
+      return true;
+    }
+
+    if (value === 0 || value === "0" || value === "false") {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function normalizeUserProfile(user) {
+  if (!user || typeof user !== "object") {
+    return user;
+  }
+
+  return {
+    ...user,
+    fullName: user.fullName ?? user.full_name ?? user.name ?? "",
+    email: user.email ?? user.username ?? "",
+    phone: user.phone ?? user.phoneNumber ?? user.phone_number ?? "",
+    isActive: normalizeIsActive(user),
+  };
+}
+
+function extractTokenFromLoginResponse(data) {
+  if (!data) {
+    return null;
+  }
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (typeof data.token === "string" && data.token.trim()) {
+    return data.token;
+  }
+
+  if (typeof data.accessToken === "string" && data.accessToken.trim()) {
+    return data.accessToken;
+  }
+
+  if (typeof data.jwt === "string" && data.jwt.trim()) {
+    return data.jwt;
+  }
+
+  return null;
 }
 
 function readStoredProfileAddresses() {
@@ -90,24 +202,26 @@ function persistStructuredAddress(userId, payload) {
 }
 
 function mergeStoredAddress(profile) {
-  if (!profile?.id) {
-    return profile;
+  const normalizedProfile = normalizeUserProfile(profile);
+
+  if (!normalizedProfile?.id) {
+    return normalizedProfile;
   }
 
   const currentAddressMap = readStoredProfileAddresses();
-  const storedAddress = currentAddressMap[String(profile.id)];
+  const storedAddress = currentAddressMap[String(normalizedProfile.id)];
 
   if (!storedAddress) {
-    return profile;
+    return normalizedProfile;
   }
 
   return {
-    ...profile,
-    addressDetail: profile.addressDetail ?? storedAddress.addressDetail,
-    province: profile.province ?? storedAddress.provinceName,
-    district: profile.district ?? storedAddress.districtName,
-    ward: profile.ward ?? storedAddress.wardName,
-    latestShippingAddress: profile.latestShippingAddress || storedAddress,
+    ...normalizedProfile,
+    addressDetail: normalizedProfile.addressDetail ?? storedAddress.addressDetail,
+    province: normalizedProfile.province ?? storedAddress.provinceName,
+    district: normalizedProfile.district ?? storedAddress.districtName,
+    ward: normalizedProfile.ward ?? storedAddress.wardName,
+    latestShippingAddress: normalizedProfile.latestShippingAddress || storedAddress,
   };
 }
 
@@ -139,8 +253,10 @@ async function persistProfileUpdate(id, payload) {
 }
 
 function mergeSubmittedAddress(profile, payload) {
+  const normalizedProfile = normalizeUserProfile(profile);
+
   if (!payload || typeof payload !== "object") {
-    return profile;
+    return normalizedProfile;
   }
 
   const hasStructuredAddress =
@@ -148,18 +264,18 @@ function mergeSubmittedAddress(profile, payload) {
 
   if (!hasStructuredAddress) {
     return {
-      ...profile,
-      address: payload.address ?? profile?.address,
+      ...normalizedProfile,
+      address: payload.address ?? normalizedProfile?.address,
     };
   }
 
   return {
-    ...profile,
-    address: payload.address ?? profile?.address,
-    addressDetail: payload.addressDetail ?? profile?.addressDetail,
-    province: payload.provinceName ?? profile?.province,
-    district: payload.districtName ?? profile?.district,
-    ward: payload.wardName ?? profile?.ward,
+    ...normalizedProfile,
+    address: payload.address ?? normalizedProfile?.address,
+    addressDetail: payload.addressDetail ?? normalizedProfile?.addressDetail,
+    province: payload.provinceName ?? normalizedProfile?.province,
+    district: payload.districtName ?? normalizedProfile?.district,
+    ward: payload.wardName ?? normalizedProfile?.ward,
     latestShippingAddress: {
       provinceCode: payload.provinceCode,
       provinceName: payload.provinceName,
@@ -176,14 +292,27 @@ function mergeSubmittedAddress(profile, payload) {
 
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
-    const response = await api.post("/auth/login", values);
-    return response.data.token;
+    const payload = {
+      email: values?.email ?? "",
+      password: values?.password ?? "",
+    };
+    const response = await api.post("/auth/login", payload);
+    const token = extractTokenFromLoginResponse(response.data);
+
+    if (!token) {
+      return rejectWithValue("Đăng nhập thất bại do frontend không đọc được token từ response.");
+    }
+
+    return {
+      token,
+      sessionUser: buildSessionUserFromToken(token),
+    };
   } catch (error) {
     if (error.response?.status === 500) {
       return rejectWithValue("Sai email hoặc mật khẩu. Vui lòng thử lại.");
     }
 
-    return rejectWithValue(getErrorMessage(error, "Đăng nhập thất bại. Vui lòng thử lại."));
+    return rejectWithValue(getErrorMessage(error, FALLBACK_AUTH_ERROR_MESSAGE));
   }
 });
 
@@ -201,6 +330,13 @@ export const fetchProfile = createAsyncThunk("/user/profile", async (_, { reject
     const response = await api.get("/user/profile");
     return response.data;
   } catch (error) {
+    if (error.response?.status === 403) {
+      return rejectWithValue({
+        status: 403,
+        message: "Không có quyền truy cập thông tin hồ sơ với vai trò hiện tại.",
+      });
+    }
+
     return rejectWithValue(getErrorMessage(error, "Không thể lấy thông tin người dùng."));
   }
 });
@@ -235,6 +371,17 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    restoreSessionFromToken(state, action) {
+      const token = action.payload;
+      const sessionUser = buildSessionUserFromToken(token);
+
+      if (!token) {
+        return;
+      }
+
+      state.isAuthenticated = true;
+      state.user = state.user ? { ...sessionUser, ...state.user } : sessionUser;
+    },
     logout(state) {
       state.user = null;
       state.isAuthenticated = false;
@@ -250,9 +397,14 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
+        state.isAuthenticated = true;
+        state.user = state.user
+          ? { ...action.payload.sessionUser, ...state.user }
+          : action.payload.sessionUser;
+        state.error = null;
         state.notificationMessage = "Đăng nhập thành công";
         state.notificationType = "success";
-        localStorage.setItem("token", action.payload);
+        localStorage.setItem("token", action.payload.token);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -285,7 +437,14 @@ const authSlice = createSlice({
       })
       .addCase(fetchProfile.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error =
+          action.payload && typeof action.payload === "object"
+            ? action.payload.message
+            : action.payload;
+
+        if (localStorage.getItem("token")) {
+          state.isAuthenticated = true;
+        }
       })
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
@@ -306,5 +465,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout } = authSlice.actions;
+export const { logout, restoreSessionFromToken } = authSlice.actions;
 export default authSlice.reducer;

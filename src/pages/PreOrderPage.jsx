@@ -8,6 +8,7 @@ import {
   fetchPreorderProducts,
   fetchProductById,
 } from "../redux/products/producSlice";
+import Product3DViewer from "../components/common/Model3dViewer";
 import { getPrimaryProductImage } from "../utils/productImages";
 
 function FeaturePill({ title, description }) {
@@ -16,6 +17,20 @@ function FeaturePill({ title, description }) {
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
     </div>
+  );
+}
+
+function ProductPreview({ product, className = "" }) {
+  if (product?.model3dUrl) {
+    return <Product3DViewer modelUrl={product.model3dUrl} className={className} />;
+  }
+
+  return (
+    <img
+      src={getPrimaryProductImage(product)}
+      alt={product?.name}
+      className={`h-full w-full object-cover ${className}`}
+    />
   );
 }
 
@@ -72,17 +87,14 @@ export default function PreorderPage() {
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {preorderItems.map((product) => (
-            <button
+            <div
               key={product.id}
-              type="button"
-              onClick={() => handleSelectProduct(product.id)}
               className="group overflow-hidden rounded-[28px] border border-white/80 bg-white/95 text-left shadow-[0_18px_40px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1.5 hover:border-teal-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
             >
               <div className="relative h-48 overflow-hidden bg-slate-100">
-                <img
-                  src={getPrimaryProductImage(product)}
-                  alt={product.name}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                <ProductPreview
+                  product={product}
+                  className="transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/45 to-transparent" />
                 <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
@@ -93,23 +105,19 @@ export default function PreorderPage() {
                 </span>
               </div>
 
-              <div className="flex min-h-[250px] flex-col p-5">
+              <button
+                type="button"
+                onClick={() => handleSelectProduct(product.id)}
+                className="flex min-h-[190px] w-full flex-col p-5 text-left"
+              >
                 <h3 className="line-clamp-2 text-xl font-semibold text-slate-900">
                   {product.name}
                 </h3>
                 <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500">
                   {product.description || "Mẫu kính mới đang mở đặt trước."}
                 </p>
-                <div className="mt-auto flex items-end justify-between gap-4 pt-8">
-                  <span className="shrink-0 pb-2 text-xl font-bold leading-none text-slate-900">
-                    {Number(product.basePrice || 0).toLocaleString("vi-VN")}đ
-                  </span>
-                  <span className="inline-flex min-h-[72px] items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-center text-xs font-semibold leading-5 text-teal-700">
-                    Chọn mẫu này
-                  </span>
-                </div>
-              </div>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
 
@@ -158,11 +166,7 @@ export default function PreorderPage() {
 
         <div className="overflow-hidden rounded-[32px] border border-white/80 bg-white/95 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
           <div className="relative h-80 overflow-hidden bg-slate-100">
-            <img
-              src={getPrimaryProductImage(selectedProduct)}
-              alt={selectedProduct.name}
-              className="h-full w-full object-cover"
-            />
+            <ProductPreview product={selectedProduct} />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-slate-950/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 text-white">
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">

@@ -4,6 +4,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { Button } from "./Button";
 import { fetchProductById } from "../../redux/products/producSlice";
 import Product3DViewer from "./Model3dViewer";
+import { appToast } from "../../utils/appToast";
+import { toggleFavorite } from "../../redux/favorites/favoriteSlice";
+import { getProductAvailability, isPreorderProduct } from "../../utils/productCatalog";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
@@ -51,9 +54,6 @@ export function ProductCard({ product }) {
 
     appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
   }
-
-  console.log(product);
-
   return (
     <div
       className="

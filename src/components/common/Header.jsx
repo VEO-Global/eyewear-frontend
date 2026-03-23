@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Search, ShoppingCart, Glasses, User, Bell, X, ArrowUpRight } from "lucide-react";
+import { Search, ShoppingCart, Glasses, User, Bell, X, ArrowUpRight, Menu } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
@@ -12,6 +12,8 @@ import {
   removeNotification,
 } from "../../redux/notification/notificationSlice";
 import { appToast } from "../../utils/appToast";
+import { getRoleDisplayLabel, isStaffRole } from "../../utils/authRole";
+import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -144,16 +146,26 @@ export function Header() {
 
   const [dropDownMenu, setDropDownMenu] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
+  const [openStaffMenu, setOpenStaffMenu] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const notificationRef = useRef(null);
   const searchRef = useRef(null);
+  const staffMenuRef = useRef(null);
 
   const unreadCount = notifications.filter((item) => !item.read).length;
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
   const isOrderTrackingPage = location.pathname === "/user/orders";
   const activeOrderTab =
     new URLSearchParams(location.search).get("tab") || "tat-ca";
+  const staffOnly = isStaffRole(user?.role);
+  const staffTaskItems = [
+    "Tiếp nhận và xử lý đơn hàng",
+    "Kiểm tra các thông số prescription và liên hệ hỗ trợ khách hàng điều chỉnh",
+    "Xác nhận đơn, chuyển cho bộ phận Operations Staff để giao vận và gia công/làm kính",
+    "Xử lý đơn pre-order",
+    "Xử lý khiếu nại: đổi trả, bảo hành, hoàn tiền",
+  ];
 
   useEffect(() => {
     if (!products.length) {
@@ -246,6 +258,11 @@ export function Header() {
     navigate(`/user/orders?tab=${tabValue}`);
   }
 
+  function handleStaffTaskNavigate(href) {
+    navigate(href);
+    setOpenStaffMenu(false);
+  }
+
   function handleSearchSubmit(event) {
     if (event.key !== "Enter") {
       return;
@@ -277,6 +294,10 @@ export function Header() {
 
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setIsSearchFocused(false);
+      }
+
+      if (staffMenuRef.current && !staffMenuRef.current.contains(event.target)) {
+        setOpenStaffMenu(false);
       }
     }
 
@@ -387,9 +408,7 @@ export function Header() {
                       Xin chào, {user.fullName}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {user.role === "CUSTOMER"
-                        ? "Khách hàng"
-                        : "Quản trị viên"}
+                      {getRoleDisplayLabel(user.role)}
                     </span>
                     <DropDownMenu
                       openMenu={dropDownMenu}
@@ -510,20 +529,68 @@ export function Header() {
               )}
             </div>
 
-            <Tooltip
-              title="Xem tất cả sản phẩm trong giỏ hàng"
-              onClick={handleCartClick}
-            >
-              <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
-                <ShoppingCart className="h-6 w-6" />
+            {staffOnly ? (
+              <div className="relative" ref={staffMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setOpenStaffMenu((prev) => !prev)}
+                  className="rounded-full p-2 text-gray-600 transition-colors hover:bg-white hover:text-teal-600"
+                >
+                  <Menu className="h-6 w-6" />
+                </button>
 
-                {isAuthenticated && totalProduct > 0 && (
-                  <span className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-500 text-xs font-bold text-white">
-                    {totalProduct}
-                  </span>
+                {openStaffMenu && (
+                  <div className="absolute right-0 top-full z-[300] mt-4 w-[400px] max-h-[calc(100vh-110px)] overflow-hidden rounded-3xl border border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl">
+                    <div className="border-b border-slate-100 bg-gradient-to-r from-teal-50 via-white to-sky-50 px-5 py-3">
+                      <h3 className="text-lg font-semibold text-slate-900">Bảng chức năng nhân viên</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Các nhóm nghiệp vụ chính cho Sales Staff trong ca làm việc.
+                      </p>
+                    </div>
+
+                    <div className="staff-menu-scroll max-h-[calc(100vh-190px)] overflow-y-auto bg-slate-50/80 px-4 py-3 pr-2">
+                      <div className="flex flex-col gap-3 pb-6">
+                      {sharedStaffTaskItems.map((task, index) => (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => handleStaffTaskNavigate(task.href)}
+                          className="block w-full rounded-[22px] border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold leading-5 text-slate-800">
+                                {index + 1}. {task.title}
+                              </p>
+                              <p className="mt-1 text-sm leading-6 text-slate-500">
+                                {task.description}
+                              </p>
+                            </div>
+                            <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                          </div>
+                        </button>
+                      ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-            </Tooltip>
+            ) : (
+              <Tooltip
+                title="Xem tất cả sản phẩm trong giỏ hàng"
+                onClick={handleCartClick}
+              >
+                <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
+                  <ShoppingCart className="h-6 w-6" />
+
+                  {isAuthenticated && totalProduct > 0 && (
+                    <span className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-500 text-xs font-bold text-white">
+                      {totalProduct}
+                    </span>
+                  )}
+                </div>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -554,7 +621,7 @@ export function Header() {
           </div>
         )}
 
-        {!isOrderTrackingPage && (
+        {!isOrderTrackingPage && !staffOnly && (
           <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
             {navItems.map((item) => (
               <button

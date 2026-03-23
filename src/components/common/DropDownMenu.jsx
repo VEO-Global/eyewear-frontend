@@ -1,4 +1,4 @@
-import { LogOut, UserCircle } from "lucide-react";
+import { LogOut, PackageSearch, UserCircle } from "lucide-react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 
@@ -8,11 +8,11 @@ export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
   if (!openMenu) return null;
   return (
     <div
-      className="abs right-0 mt-2 w-52 bg-white border rounded-xl shadow-lg py-2 z-50"
+      className="absolute right-0 mt-2 w-52 rounded-xl border bg-white py-2 shadow-lg z-50"
       onMouseLeave={() => setOpenMenu(false)}
     >
       <Link
-        to={`/user/profile/${user.id}`}
+        to="/user/profile"
         className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100"
       >
         <UserCircle className="h-4 w-4" />

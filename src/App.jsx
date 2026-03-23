@@ -1,11 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import AppRouter from "./router/AppRouter";
-import { fetchProfile } from "./redux/auth/authSlice";
-import { useEffect } from "react";
-import { fetchProducts } from "./redux/products/producSlice";
-import { fetchAllCategories } from "./redux/category/categorySlice";
-import { fetchUsers } from "./redux/admin/adminSlice";
+import { fetchProfile, restoreSessionFromToken } from "./redux/auth/authSlice";
 
 function App() {
   const dispatch = useDispatch();
@@ -14,6 +10,7 @@ function App() {
     const token = localStorage.getItem("token");
 
     if (token) {
+      dispatch(restoreSessionFromToken(token));
       dispatch(fetchProfile());
     }
   }, [dispatch]);

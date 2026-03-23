@@ -4,12 +4,15 @@ import { Header } from "../components/common/Header";
 import { HeroSection } from "../components/homepage/HeroSection";
 import { CustomGlassesProcess } from "../components/homepage/CustomGlassesProcess";
 import { WhyChooseUs } from "../components/homepage/WhyChooseUs";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { fetchAllCategories } from "../redux/category/categorySlice";
+import { isStaffRole } from "../utils/authRole";
 // import ProductionGrid from "../components/homepage/ProductionGrid";
 
 export default function HomePages() {
   const dispatch = useDispatch();
+  const userRole = useSelector((state) => state.auth.user?.role);
+  const staffOnly = isStaffRole(userRole);
 
   useEffect(() => {
     dispatch(fetchAllCategories());
@@ -18,9 +21,9 @@ export default function HomePages() {
   return (
     <div>
       <HeroSection />
-      <ServiceCards />
-      <CustomGlassesProcess />
-      <WhyChooseUs />
+      {!staffOnly && <ServiceCards staffOnly={staffOnly} />}
+      {!staffOnly && <CustomGlassesProcess />}
+      {!staffOnly && <WhyChooseUs />}
     </div>
   );
 }

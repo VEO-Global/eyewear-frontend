@@ -98,22 +98,50 @@ const initialState = {
   stockOverrides: readStoredStockOverrides(),
 };
 
-export const fetchProducts = createAsyncThunk("products/fetch", async (_, { rejectWithValue }) => {
-  try {
-    const response = await api.get("/products");
-
-    return response.data;
-  } catch (error) {
-    return rejectWithValue(error.response?.data?.message || "Không thể lấy danh sách sản phẩm");
+export const fetchProducts = createAsyncThunk(
+  "products/fetch",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/products");
+      const products = Array.isArray(response.data) ? response.data : [];
+      return products.map(normalizeProduct);
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Không thể lấy danh sách sản phẩm"
+      );
+    }
   }
 );
 
-export const fetchProductById = createAsyncThunk("products/fetchById", async (id, { rejectWithValue }) => {
-  try {
-    const response = await api.get(`/products/${Number(id)}`);
-    return response.data;
-  } catch (error) {
-    return rejectWithValue(error.response?.data?.message || "Không thể lấy sản phẩm");
+export const fetchPreorderProducts = createAsyncThunk(
+  "products/fetchPreorder",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/products");
+      const products = Array.isArray(response.data) ? response.data : [];
+
+      return products
+        .map(normalizeProduct)
+        .filter((product) => isPreorderProduct(product));
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Không thể lấy danh sách sản phẩm đặt trước"
+      );
+    }
+  }
+);
+
+export const fetchProductById = createAsyncThunk(
+  "products/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/products/${Number(id)}`);
+      return normalizeProduct(response.data);
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Không thể lấy sản phẩm"
+      );
+    }
   }
 );
 
@@ -153,7 +181,10 @@ const productSlice = createSlice({
               return variant;
             }
 
-            const nextStock = Math.max(0, Number(variant.stockQuantity || 0) - amount);
+            const nextStock = Math.max(
+              0,
+              Number(variant.stockQuantity || 0) - amount
+            );
             state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
 
             return {
@@ -197,7 +228,10 @@ const productSlice = createSlice({
               return variant;
             }
 
-            const nextStock = Math.max(0, Number(variant.stockQuantity || 0) + amount);
+            const nextStock = Math.max(
+              0,
+              Number(variant.stockQuantity || 0) + amount
+            );
             state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
 
             return {

@@ -102,8 +102,10 @@ export default function PreorderForm({ selectedProduct }) {
       nextValues.receiverName = user.fullName;
     }
 
-    if (!currentValues.phoneNumber?.trim() && user?.phone) {
-      nextValues.phoneNumber = user.phone;
+    const userPhone = user?.phone ?? user?.phoneNumber ?? user?.phone_number;
+
+    if (!currentValues.phoneNumber?.trim() && userPhone) {
+      nextValues.phoneNumber = userPhone;
     }
 
     if (!hasCheckoutAddress(currentValues.shippingAddress)) {

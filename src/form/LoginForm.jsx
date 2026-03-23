@@ -2,31 +2,47 @@ import React, { useEffect } from "react";
 import { Key, Mail } from "lucide-react";
 import { Button, Checkbox, Form, Input } from "antd";
 import { Link, useNavigate } from "react-router-dom";
-import { fetchProfile, loginUser } from "../redux/auth/authSlice";
 import { useDispatch, useSelector } from "react-redux";
+import { fetchProfile, loginUser } from "../redux/auth/authSlice";
 import { appToast } from "../utils/appToast";
+
+function resolvePostLoginPath(role) {
+  switch (role) {
+    case "ADMIN":
+      return "/admin/dashboard";
+    case "CUSTOMER":
+    case "SALES":
+    default:
+      return "/";
+  }
+}
 
 export default function LoginnForm() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, loading, user } = useSelector((state) => state.auth);
 
   async function handleLogin(values) {
     const result = await dispatch(loginUser(values));
 
     if (loginUser.fulfilled.match(result)) {
       const profileResult = await dispatch(fetchProfile());
+      const nextRole = profileResult.payload?.role ?? result.payload.sessionUser?.role ?? user?.role;
+      const nextPath = resolvePostLoginPath(nextRole);
 
       if (fetchProfile.fulfilled.match(profileResult)) {
         appToast.success("Đăng nhập thành công");
-        navigate("/");
+        navigate(nextPath);
         return;
       }
 
-      appToast.error(
-        profileResult.payload ||
-          "Đăng nhập thành công nhưng không tải được hồ sơ người dùng."
-      );
+      if (profileResult.payload?.status && profileResult.payload.status !== 403) {
+        appToast.warning(profileResult.payload.message || "Không tải được thông tin người dùng.");
+      } else {
+        appToast.success("Đăng nhập thành công");
+      }
+
+      navigate(nextPath);
       return;
     }
 
@@ -37,9 +53,9 @@ export default function LoginnForm() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      navigate(resolvePostLoginPath(user?.role));
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, user?.role]);
 
   return (
     <div className="rounded-2xl bg-white/80 p-10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur">
@@ -62,6 +78,7 @@ export default function LoginnForm() {
             </div>
             <Input
               placeholder="you@example.com"
+              autoComplete="email"
               className="w-4/5 border-0 outline-none shadow-none focus:shadow-none"
             />
           </div>
@@ -78,6 +95,7 @@ export default function LoginnForm() {
             </div>
             <Input.Password
               placeholder="••••••••"
+              autoComplete="current-password"
               className="w-4/5 border-0 outline-none shadow-none focus:shadow-none"
             />
           </div>
@@ -96,6 +114,7 @@ export default function LoginnForm() {
         <Form.Item>
           <Button
             htmlType="submit"
+            loading={loading}
             className="flex w-full items-center justify-center gap-2"
             style={{ backgroundColor: "black", height: "44px" }}
           >

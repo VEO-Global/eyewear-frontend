@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   UserCircle,
+
   CheckCircle,
   Phone,
   ShieldCheck,
   Heart,
   ShoppingCart,
   EyeIcon,
-} from "lucide-react";
+} from
+"lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import AddressSelector from "../components/checkout/AddressSelector";
@@ -21,6 +23,7 @@ import {
 } from "../utils/userAddress";
 import { isPreorderProduct } from "../utils/productCatalog";
 import { getPrimaryProductImage } from "../utils/productImages";
+import { getRoleDisplayLabel } from "../utils/authRole";
 
 const emptyShippingAddress = {
   provinceCode: undefined,
@@ -31,6 +34,22 @@ const emptyShippingAddress = {
   wardName: "",
   addressDetail: "",
 };
+
+function getUserPhone(user) {
+  return user?.phone ?? user?.phoneNumber ?? user?.phone_number ?? "";
+}
+
+function getAccountStatusLabel(user) {
+  if (user?.isActive === true) {
+    return "Tài khoản đang hoạt động";
+  }
+
+  if (user?.isActive === false) {
+    return "Tài khoản đang tạm khóa";
+  }
+
+  return "Chưa đồng bộ trạng thái tài khoản";
+}
 
 function buildProfileFormState(user) {
   const latestAddress = extractLatestCheckoutAddress(user);
@@ -46,7 +65,7 @@ function buildProfileFormState(user) {
 
   return {
     fullName: user?.fullName || "",
-    phone: user?.phone || "",
+    phone: getUserPhone(user),
     shippingAddress: {
       ...fallbackAddress,
       addressDetail: fallbackAddress.addressDetail || directAddress,
@@ -93,6 +112,7 @@ export default function UserProfilePage() {
     () => formatCheckoutAddress(formData.shippingAddress),
     [formData.shippingAddress]
   );
+  const isStaffUser = user?.role === "SALES";
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -223,22 +243,46 @@ export default function UserProfilePage() {
 
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
               <ShieldCheck size={16} />
-              {user?.isActive ? "Tài khoản đang hoạt động" : "Tài khoản đang tạm khóa"}
+              {getAccountStatusLabel(user)}
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div
+            className={`mt-8 grid grid-cols-1 gap-4 ${
+              isStaffUser ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
+            }`}
+          >
             <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">Mã khách hàng</p>
+              <p className="text-sm font-medium text-slate-500">
+                {isStaffUser ? "Mã nhân viên" : "Mã khách hàng"}
+              </p>
               <p className="mt-3 text-3xl font-bold text-slate-900">{user?.id || "--"}</p>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">Vai trò</p>
-              <p className="mt-3 text-2xl font-semibold text-slate-900">
-                {user?.role === "CUSTOMER" ? "Khách hàng" : "Quản trị viên"}
-              </p>
-            </div>
+            {isStaffUser ? (
+              <>
+                <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
+                  <p className="text-sm font-medium text-slate-500">Họ và tên</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">
+                    {user?.fullName || "Chưa cập nhật"}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
+                  <p className="text-sm font-medium text-slate-500">Số điện thoại</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">
+                    {getUserPhone(user) || "Chưa cập nhật"}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
+                <p className="text-sm font-medium text-slate-500">Vai trò</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">
+                  {getRoleDisplayLabel(user?.role)}
+                </p>
+              </div>
+            )}
 
             <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
               <p className="text-sm font-medium text-slate-500">Email</p>
@@ -248,6 +292,7 @@ export default function UserProfilePage() {
             </div>
           </div>
 
+          {!isStaffUser && (
           <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -314,6 +359,7 @@ export default function UserProfilePage() {
                 </div>
               </div>
 
+              {!isStaffUser && (
               <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-slate-700">Địa chỉ nhận hàng</p>
@@ -332,6 +378,7 @@ export default function UserProfilePage() {
                   />
                 </div>
               </div>
+              )}
 
               {isEditing && (
                 <div className="flex flex-wrap justify-end gap-3 pt-2">
@@ -353,8 +400,9 @@ export default function UserProfilePage() {
               )}
             </form>
           </div>
-
-          <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          )}
+          {!isStaffUser && (
+            <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -448,7 +496,8 @@ export default function UserProfilePage() {
                 Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu lại.
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import React from "react";
 import { Clock, Eye, Glasses, PenTool } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-export function ServiceCards() {
+export function ServiceCards({ staffOnly = false }) {
   const navigate = useNavigate();
 
   const services = [
@@ -44,6 +44,8 @@ export function ServiceCards() {
     },
   ];
 
+  const visibleServices = staffOnly ? services.filter((_, index) => index === 0 || index === 2) : services;
+
   return (
     <section className="py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -57,8 +59,8 @@ export function ServiceCards() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {services.map((service, index) => (
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 ${staffOnly ? "lg:grid-cols-2" : "lg:grid-cols-4"}`}>
+          {visibleServices.map((service, index) => (
             <button
               key={index}
               type="button"

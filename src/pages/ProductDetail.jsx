@@ -11,6 +11,7 @@ import { ProductGallery } from "../components/productdetail/ProductGallery";
 import { ProductInfo } from "../components/productdetail/ProductInfor";
 import { VariantSelector } from "../components/productdetail/VariantSelector";
 import { Button } from "../components/common/Button";
+import Product3DViewer from "../components/common/Model3dViewer";
 import { getVariantStock, isPreorderProduct } from "../utils/productCatalog";
 import { extractProductImages, getPrimaryProductImage } from "../utils/productImages";
 
