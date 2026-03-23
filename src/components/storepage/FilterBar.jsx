@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import data from "../../mockdata/data.js";
 import {
   ChevronDown,
   CircleDot,
@@ -7,11 +6,13 @@ import {
   MoveDown,
   RotateCcw,
 } from "lucide-react";
+import { useSelector } from "react-redux";
 export default function FilterBar() {
-  const categories = [...new Set(data.map((item) => item.category))];
-  const statuses = [...new Set(data.map((item) => item.status))];
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+
+  const { products } = useSelector((state) => state.products);
+  const { categories } = useSelector((state) => state.category);
 
   function onCategoryChange(category) {
     setSelectedCategory(category);
@@ -24,7 +25,18 @@ export default function FilterBar() {
     setSelectedCategory("");
     setSelectedStatus("");
   }
+  const productsWithStatus = products.map((product) => {
+    const isInStock = product.variants?.filter((v) => v.stockQuantity > 0);
 
+    return {
+      ...product,
+      status: isInStock ? "IN_STOCK" : "OUT_OF_STOCK",
+    };
+  });
+
+  const statusList = [...new Set(productsWithStatus.map((p) => p.status))];
+
+  // const filteredProducts =
   return (
     <>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 ">
@@ -45,8 +57,8 @@ export default function FilterBar() {
             </svg>
             <span className="px-2 text-gray-500 font-medium">
               Tổng{" "}
-              <span className="text-teal-600 font-bold">{data.length}</span> sản
-              phẩm
+              <span className="text-teal-600 font-bold">{products.length}</span>{" "}
+              sản phẩm
             </span>
           </div>
 
@@ -58,9 +70,9 @@ export default function FilterBar() {
                 className="w-full sm:w-48 appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2.5 px-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent cursor-pointer transition-shadow"
               >
                 <option value="">Loại kính</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
+                {categories.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -77,9 +89,9 @@ export default function FilterBar() {
                 className="w-full sm:w-48 appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2.5 px-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent cursor-pointer transition-shadow"
               >
                 <option value="">Trạng thái</option>
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                {statusList.map((s) => (
+                  <option key={s} value={s}>
+                    {`${s === "IN_STOCK" ? "Còn hàng" : "Hết hàng"}`}
                   </option>
                 ))}
               </select>

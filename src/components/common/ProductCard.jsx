@@ -5,6 +5,7 @@ import { Button } from "./Button";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { fetchProductById } from "../../redux/products/producSlice";
+import Product3DViewer from "./Model3dViewer";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export function ProductCard({ product }) {
     navigate(`/products/${product.id}`);
   };
 
+  console.log(product);
+
   return (
     <div
       className="
@@ -24,19 +27,16 @@ export function ProductCard({ product }) {
       "
     >
       {/* Product Image */}
-      <div className="relative group h-48 bg-gray-100 overflow-hidden">
-        <img
-          src={product.image || "/placeholder.jpg"}
-          alt={product.name}
-          className="
-            w-full h-full object-cover
-            transition-transform duration-500
-            group-hover:scale-110
-          "
+      <div
+        className="bg-gray-100 w-full h-full flex items-center justify-center overflow-hidden"
+        style={{
+          height: "150px",
+        }}
+      >
+        <Product3DViewer
+          modelUrl={product.model3dUrl}
+          className="w-full h-full"
         />
-
-        {/* Overlay ViewDetail */}
-        {/* <ViewDetail onClick={handleViewDetail} /> */}
       </div>
 
       {/* Product Details */}

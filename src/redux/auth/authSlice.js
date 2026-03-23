@@ -36,7 +36,6 @@ export const registerUser = createAsyncThunk("/auth/register", async (values, { 
 export const fetchProfile = createAsyncThunk("/user/profile", async (_, { rejectWithValue }) => {
   try {
     const response = await api.get("/user/profile");
-
     return response.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || "Không thể lấy thông tin user");

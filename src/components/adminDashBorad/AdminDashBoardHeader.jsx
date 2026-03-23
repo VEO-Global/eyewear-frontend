@@ -1,16 +1,14 @@
 import { ActivityIcon, ShieldIcon, UsersIcon } from "lucide-react";
 import React from "react";
 // import { useSelector } from "react-redux";
-import { mockUsers } from "../../mockdata/useMockData";
+import { useSelector } from "react-redux";
 export default function AdminDashBoardHeader() {
-  // const { totalUsers } = 4;
+  const { totalUser } = useSelector((state) => state.admin);
 
-  // const managerList = totalUsers?.filter((u) => u.role_id === 4);
-  // const operationList = totalUsers?.filter((u) => u.role_id === 3);
-  // const salesList = totalUsers?.filter((u) => u.role_id === 2);
-  const managerList = mockUsers?.filter((u) => u.role.id === 4);
-  const operationList = mockUsers?.filter((u) => u.role.id === 3);
-  const salesList = mockUsers.filter((u) => u.role.id === 2);
+  const managerList = totalUser?.filter((u) => u.role === "MANAGER");
+  const operationList = totalUser?.filter((u) => u.role === "OPERATIONS");
+  const salesList = totalUser?.filter((u) => u.role === "SALES");
+
   return (
     <div className="mb-8">
       <div className="mb-6">
@@ -30,7 +28,7 @@ export default function AdminDashBoardHeader() {
               Tất cả người dùng
             </p>
             <p className="text-2xl font-bold text-slate-900">
-              {mockUsers.length}
+              {totalUser.length}
             </p>
           </div>
         </div>
@@ -44,7 +42,7 @@ export default function AdminDashBoardHeader() {
               Tài khoản còn hoạt động
             </p>
             <p className="text-2xl font-bold text-slate-900">
-              {mockUsers.filter((u) => u.isActive === true).length}
+              {totalUser.filter((u) => u.isActive === true).length}
             </p>
           </div>
         </div>

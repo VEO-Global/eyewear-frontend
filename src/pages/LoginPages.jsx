@@ -7,33 +7,8 @@ import { fetchProfile, loginUser } from "../redux/auth/authSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import { toast } from "react-toastify";
-import LoginnForm from "../form/LoginForm";
+import LoginnForm from "../form/auth/LoginForm";
 export default function LoginPage() {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { isAuthenticated, notificationMessage, notificationType } =
-    useSelector((state) => state.auth);
-
-  async function handleLogin(values) {
-    const result = await dispatch(loginUser(values));
-
-    if (loginUser.fulfilled.match(result)) {
-      dispatch(fetchProfile());
-      toast.success("Đăng nhập thành công");
-      navigate("/");
-    }
-
-    if (loginUser.rejected.match(result)) {
-      toast.error(result.payload || "Sai email hoặc mật khẩu");
-    }
-  }
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/");
-    }
-  }, [isAuthenticated, navigate]);
-
   return (
     <>
       <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
