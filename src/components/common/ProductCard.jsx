@@ -1,23 +1,64 @@
-/* eslint-disable no-unused-vars */
 import { EyeIcon, Heart, ShoppingCart } from "lucide-react";
-import ViewDetail from "./ViewDetail";
-import { Button } from "./Button";
 import { useNavigate } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { Button } from "./Button";
 import { fetchProductById } from "../../redux/products/producSlice";
 import Product3DViewer from "./Model3dViewer";
+import { appToast } from "../../utils/appToast";
+import { toggleFavorite } from "../../redux/favorites/favoriteSlice";
+import {
+  getProductAvailability,
+  isPreorderProduct,
+} from "../../utils/productCatalog";
 
 export function ProductCard({ product }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const user = useSelector((state) => state.auth.user);
+  const favoriteItems = useSelector((state) => state.favorites.items);
+  const isPreorder = isPreorderProduct(product);
+  const availability = getProductAvailability(product);
+  const isFavorite = favoriteItems.some(
+    (item) => Number(item.id) === Number(product.id)
+  );
 
-  const handleViewDetail = () => {
+  function openProductDetail() {
     dispatch(fetchProductById(product.id));
     navigate(`/products/${product.id}`);
-  };
+  }
 
-  console.log(product);
+  function handlePrimaryAction() {
+    dispatch(fetchProductById(product.id));
 
+    if (isPreorder) {
+      navigate("/user/preorder", {
+        state: { preserveSelection: true },
+      });
+      return;
+    }
+
+    navigate(`/products/${product.id}`);
+  }
+
+  async function handleToggleFavorite() {
+    if (!user?.id) {
+      appToast.warning("Vui lòng đăng nhập để lưu sản phẩm yêu thích.");
+      return;
+    }
+
+    const result = await dispatch(toggleFavorite(product));
+
+    if (toggleFavorite.fulfilled.match(result)) {
+      appToast.success(
+        isFavorite
+          ? "Đã xóa sản phẩm khỏi danh sách yêu thích."
+          : "Đã lưu sản phẩm vào danh sách yêu thích."
+      );
+      return;
+    }
+
+    appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
+  }
   return (
     <div
       className="
@@ -26,47 +67,71 @@ export function ProductCard({ product }) {
         hover:shadow-2xl hover:border-teal-500 hover:-translate-y-1
       "
     >
-      {/* Product Image */}
       <div
-        className="bg-gray-100 w-full h-full flex items-center justify-center overflow-hidden"
-        style={{
-          height: "150px",
-        }}
+        className="relative group h-48 cursor-pointer overflow-hidden bg-gray-100"
+        onClick={openProductDetail}
       >
         <Product3DViewer
           modelUrl={product.model3dUrl}
           className="w-full h-full"
         />
+
+        {isPreorder ? (
+          <span className="absolute left-3 top-3 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+            Đặt trước
+          </span>
+        ) : null}
       </div>
 
-      {/* Product Details */}
-      <div className="p-6 flex flex-col grow">
-        {/* Product Name */}
-        <h3 className="text-lg font-semibold text-gray-800 mb-2 line-clamp-2">
+      <div className="flex grow flex-col p-6">
+        <h3 className="mb-2 line-clamp-2 text-lg font-semibold text-gray-800">
           {product.name}
         </h3>
 
-        {/* Price + Stock */}
-        <div className="flex items-center justify-between mb-4 grow">
-          {/* Price */}
-          <span className="text-xl font-bold ">
-            {product.basePrice?.toLocaleString("vi-VN")} ₫
+        <div className="mb-4 grow">
+          <span className="text-xl font-bold">
+            {Number(product.basePrice || 0).toLocaleString("vi-VN")} ₫
           </span>
+          <p className="mt-2 text-sm text-gray-500">
+            {availability === "preorder"
+              ? "Nhận đặt trước"
+              : availability === "out_of_stock"
+                ? "Tạm hết hàng"
+                : "Có sẵn"}
+          </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-2">
           <Button
             size="sm"
-            className="flex-1 bg-teal-600 text-white hover:bg-teal-700 gap-2 cursor-pointer"
-            onClick={handleViewDetail}
+            className="flex-1 cursor-pointer gap-2 bg-teal-600 text-white hover:bg-teal-700"
+            onClick={handlePrimaryAction}
           >
-            <EyeIcon className="w-4 h-4 text-white" />
-            <span className="font-medium text-white">Xem Chi tiết</span>
+            {isPreorder ? (
+              <ShoppingCart className="h-4 w-4 text-white" />
+            ) : (
+              <EyeIcon className="h-4 w-4 text-white" />
+            )}
+            <span className="font-medium text-white">
+              {isPreorder ? "Đặt trước" : "Xem chi tiết"}
+            </span>
           </Button>
 
-          <Button size="sm" variant="danger">
-            <Heart className="w-4 h-4 text-white" />
+          <Button
+            size="sm"
+            type="button"
+            variant={isFavorite ? "danger" : "outline"}
+            className={
+              isFavorite
+                ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
+                : "border-slate-300 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+            }
+            onClick={handleToggleFavorite}
+          >
+            <Heart
+              className="h-4 w-4"
+              fill={isFavorite ? "currentColor" : "none"}
+            />
           </Button>
         </div>
       </div>

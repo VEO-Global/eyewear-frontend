@@ -1,64 +1,61 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import { Navigate, useNavigate } from "react-router-dom";
-
-const SHIPPING_COST = 30000;
-const TAX_RATE = 0.1;
+import { useNavigate } from "react-router-dom";
 
 export default function OrderSummary() {
-  const { cart, totalPrice, totalProduct } = useSelector((state) => state.cart);
+  const { cart, selectedVariantIds } = useSelector((state) => state.cart);
   const navigate = useNavigate();
-  // Format tiền VNĐ
-  const formatCurrency = (amount) => {
+
+  const selectedItems = cart.filter((item) => selectedVariantIds.includes(item.variantID));
+  const selectedTotalPrice = selectedItems.reduce(
+    (total, item) => total + item.variantPrice * item.quantity,
+    0
+  );
+  const selectedTotalProduct = selectedItems.reduce((total, item) => total + item.quantity, 0);
+
+  function formatCurrency(amount) {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
       minimumFractionDigits: 0,
     }).format(amount);
-  };
+  }
 
   return (
-    <div className="bg-card rounded-lg border border-border p-6 shadow-sm h-fit sticky top-6">
-      {/* Tiêu đề */}
-      <h2 className="text-lg font-semibold text-foreground mb-6">
-        Tóm tắt đơn hàng
-      </h2>
+    <div className="h-fit rounded-lg border border-border bg-card p-6 shadow-sm sticky top-6">
+      <h2 className="mb-6 text-lg font-semibold text-foreground">Tóm tắt đơn hàng</h2>
 
-      {/* Chi tiết giá */}
-      <div className="space-y-3 mb-6">
-        {/* Tạm tính */}
-        <div className="flex justify-between items-center text-sm text-muted-foreground">
+      <div className="mb-6 space-y-3">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Tạm tính</span>
-          <span>{formatCurrency(totalPrice)}</span>
+          <span>{formatCurrency(selectedTotalPrice)}</span>
         </div>
 
-        <div className="flex justify-between items-center text-sm text-muted-foreground">
-          <span>Tổng sản phẩm</span>
-          <span>{totalProduct}</span>
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Sản phẩm được chọn</span>
+          <span>{selectedTotalProduct}</span>
         </div>
-        {/* Divider */}
-        <div className="border-t border-border my-2" />
 
-        {/* Tổng tiền */}
-        <div className="flex justify-between items-center">
+        <div className="my-2 border-t border-border" />
+
+        <div className="flex items-center justify-between">
           <span className="font-semibold text-foreground">Tổng cộng</span>
           <span className="text-lg font-bold text-foreground">
-            {formatCurrency(totalPrice)}
+            {formatCurrency(selectedTotalPrice)}
           </span>
         </div>
       </div>
 
-      {/* Nút thanh toán */}
       <button
-        className="w-full bg-primary text-primary-foreground py-3 rounded-lg bg-orange-500 font-medium transition-all hover:opacity-90 active:scale-95 cursor-pointer"
+        className="w-full cursor-pointer rounded-lg bg-orange-500 py-3 font-medium text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => navigate("/user/cart/payment")}
+        disabled={!selectedItems.length}
       >
         <span className="text-white">Tiến hành thanh toán</span>
       </button>
 
-      {/* Thông tin */}
-      <p className="text-xs text-muted-foreground text-center mt-10">
-        Phí vận chuyển sẽ được tính khi thanh toán
+      <p className="mt-10 text-center text-xs text-muted-foreground">
+        Chỉ các sản phẩm đã tick mới được đưa vào bước thanh toán
       </p>
     </div>
   );
