@@ -70,6 +70,7 @@ export function writeStoredOrders(userId, orders) {
 
 export function createStoredOrder({
   userId,
+  user,
   checkoutValues,
   selectedCartItems,
   selectedLensProduct,
@@ -89,14 +90,29 @@ export function createStoredOrder({
     orderNumber,
     createdAt,
     paymentStatus: "paid",
-    phase: requiresPrescription
-      ? ORDER_PHASE.PRESCRIPTION_REVIEW
-      : ORDER_PHASE.PENDING_CONFIRMATION,
+    phase: ORDER_PHASE.PENDING_CONFIRMATION,
+    customerProfile: user
+      ? {
+          id: user.id ?? userId ?? null,
+          fullName: user.fullName ?? "",
+          email: user.email ?? "",
+          phone: user.phone ?? "",
+          role: user.role ?? "",
+        }
+      : null,
     receiverName: checkoutValues?.receiverName || "",
     phoneNumber: checkoutValues?.phoneNumber || "",
     shippingAddress: checkoutValues?.shippingAddress || null,
     note: checkoutValues?.note || "",
     prescriptionOption: checkoutValues?.prescriptionOption || "without_prescription",
+    prescriptionMethod:
+      checkoutValues?.prescriptionOption === "with_prescription"
+        ? checkoutValues?.prescriptionMethod || "image"
+        : undefined,
+    prescription:
+      checkoutValues?.prescriptionOption === "with_prescription"
+        ? checkoutValues?.prescription || null
+        : null,
     requiresPrescription,
     lensProduct: selectedLensProduct || null,
     lensPrice: Number(lensPrice || 0),
@@ -123,7 +139,10 @@ export function resolveOrderPhase(order, now = Date.now()) {
 
   if (
     [
+      ORDER_PHASE.PENDING_CONFIRMATION,
       ORDER_PHASE.CANCELED,
+      ORDER_PHASE.PROCESSING,
+      ORDER_PHASE.PRESCRIPTION_REVIEW,
       ORDER_PHASE.SHIPPING,
       ORDER_PHASE.READY_TO_DELIVER,
       ORDER_PHASE.COMPLETED,

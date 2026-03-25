@@ -194,6 +194,7 @@ function PaymentQrStep() {
       user.id,
       createStoredOrder({
         userId: user.id,
+        user,
         checkoutValues,
         selectedCartItems,
         selectedLensProduct,

@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  UserCircle,
-
   CheckCircle,
+  EyeIcon,
+  Heart,
   Phone,
   ShieldCheck,
-  Heart,
   ShoppingCart,
-  EyeIcon,
-} from
-"lucide-react";
+  UserCircle,
+} from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import AddressSelector from "../components/checkout/AddressSelector";
@@ -23,7 +21,7 @@ import {
 } from "../utils/userAddress";
 import { isPreorderProduct } from "../utils/productCatalog";
 import { getPrimaryProductImage } from "../utils/productImages";
-import { getRoleDisplayLabel } from "../utils/authRole";
+import { getRoleDisplayLabel, isStaffRole } from "../utils/authRole";
 
 const emptyShippingAddress = {
   provinceCode: undefined,
@@ -37,6 +35,10 @@ const emptyShippingAddress = {
 
 function getUserPhone(user) {
   return user?.phone ?? user?.phoneNumber ?? user?.phone_number ?? "";
+}
+
+function getUserId(user) {
+  return user?.id ?? user?.userId ?? user?.user_id ?? user?.userID ?? null;
 }
 
 function getAccountStatusLabel(user) {
@@ -85,6 +87,21 @@ function isValidShippingAddress(address) {
   );
 }
 
+function SummaryCard({ label, value, compact = false }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <p
+        className={`mt-3 font-semibold text-slate-900 ${
+          compact ? "text-base leading-7" : "text-2xl"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function UserProfilePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -112,7 +129,7 @@ export default function UserProfilePage() {
     () => formatCheckoutAddress(formData.shippingAddress),
     [formData.shippingAddress]
   );
-  const isStaffUser = user?.role === "SALES";
+  const isStaffUser = isStaffRole(user?.role);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -161,8 +178,10 @@ export default function UserProfilePage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!user?.id) {
-      appToast.error("Không tìm thấy thông tin người dùng.");
+    const profileUserId = getUserId(user);
+
+    if (!profileUserId) {
+      appToast.error("Không tìm thấy mã người dùng để cập nhật hồ sơ.");
       return;
     }
 
@@ -177,12 +196,10 @@ export default function UserProfilePage() {
 
     const result = await dispatch(
       updateProfile({
-        id: user.id,
+        id: profileUserId,
         data: {
           fullName: formData.fullName.trim(),
           phone: formData.phone.trim(),
-          // Backend hiện đang reject chuỗi có dấu phẩy ở field address,
-          // nên chỉ gửi phần địa chỉ chi tiết để lưu an toàn.
           address: addressDetail,
           addressDetail,
           provinceCode: formData.shippingAddress.provinceCode,
@@ -247,52 +264,17 @@ export default function UserProfilePage() {
             </div>
           </div>
 
-          <div
-            className={`mt-8 grid grid-cols-1 gap-4 ${
-              isStaffUser ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
-            }`}
-          >
-            <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">
-                {isStaffUser ? "Mã nhân viên" : "Mã khách hàng"}
-              </p>
-              <p className="mt-3 text-3xl font-bold text-slate-900">{user?.id || "--"}</p>
-            </div>
-
-            {isStaffUser ? (
-              <>
-                <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-                  <p className="text-sm font-medium text-slate-500">Họ và tên</p>
-                  <p className="mt-3 text-2xl font-semibold text-slate-900">
-                    {user?.fullName || "Chưa cập nhật"}
-                  </p>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-                  <p className="text-sm font-medium text-slate-500">Số điện thoại</p>
-                  <p className="mt-3 text-2xl font-semibold text-slate-900">
-                    {getUserPhone(user) || "Chưa cập nhật"}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Vai trò</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">
-                  {getRoleDisplayLabel(user?.role)}
-                </p>
-              </div>
-            )}
-
-            <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-500">Email</p>
-              <p className="mt-3 break-all text-lg font-semibold text-slate-900">
-                {user?.email || "Chưa cập nhật"}
-              </p>
-            </div>
+          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <SummaryCard
+              label={isStaffUser ? "Mã nhân viên" : "Mã khách hàng"}
+              value={getUserId(user) || "--"}
+            />
+            <SummaryCard label="Họ và tên" value={user?.fullName || "Chưa cập nhật"} />
+            <SummaryCard label="Số điện thoại" value={getUserPhone(user) || "Chưa cập nhật"} />
+            <SummaryCard label="Vai trò" value={getRoleDisplayLabel(user?.role)} />
+            <SummaryCard label="Email" value={user?.email || "Chưa cập nhật"} compact />
           </div>
 
-          {!isStaffUser && (
           <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -300,8 +282,8 @@ export default function UserProfilePage() {
                   Thông tin cá nhân
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  Cập nhật họ tên, số điện thoại và địa chỉ để hệ thống hỗ trợ bạn nhanh hơn
-                  trong quá trình mua hàng và đặt trước.
+                  Cập nhật họ tên, số điện thoại và địa chỉ để hệ thống hỗ trợ nhanh hơn. Staff
+                  và customer dùng chung một luồng dữ liệu profile.
                 </p>
               </div>
 
@@ -359,14 +341,13 @@ export default function UserProfilePage() {
                 </div>
               </div>
 
-              {!isStaffUser && (
               <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
                 <div className="mb-4">
-                  <p className="text-sm font-semibold text-slate-700">Địa chỉ nhận hàng</p>
+                  <p className="text-sm font-semibold text-slate-700">Địa chỉ</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
                     {fullAddress
-                      ? `Địa chỉ nhận hàng đầy đủ: ${fullAddress}`
-                      : "Chưa có địa chỉ nhận hàng đầy đủ."}
+                      ? `Địa chỉ đầy đủ: ${fullAddress}`
+                      : "Chưa có địa chỉ đầy đủ."}
                   </p>
                 </div>
 
@@ -378,7 +359,6 @@ export default function UserProfilePage() {
                   />
                 </div>
               </div>
-              )}
 
               {isEditing && (
                 <div className="flex flex-wrap justify-end gap-3 pt-2">
@@ -400,102 +380,102 @@ export default function UserProfilePage() {
               )}
             </form>
           </div>
-          )}
+
           {!isStaffUser && (
             <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                  Sản phẩm bạn đã yêu thích
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  Danh sách này lưu các mẫu kính bạn đã bấm tim để quay lại xem nhanh sau này.
-                </p>
+              <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                    Sản phẩm bạn đã yêu thích
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                    Danh sách này lưu các mẫu kính bạn đã bấm tim để quay lại xem nhanh sau này.
+                  </p>
+                </div>
+
+                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600">
+                  <Heart size={16} fill="currentColor" />
+                  {favoriteItems.length} sản phẩm
+                </span>
               </div>
 
-              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600">
-                <Heart size={16} fill="currentColor" />
-                {favoriteItems.length} sản phẩm
-              </span>
-            </div>
+              {favoriteItems.length > 0 ? (
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {favoriteItems.map((product) => {
+                    const isPreorder = isPreorderProduct(product);
 
-            {favoriteItems.length > 0 ? (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {favoriteItems.map((product) => {
-                  const isPreorder = isPreorderProduct(product);
-
-                  return (
-                    <div
-                      key={product.id}
-                      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-                    >
+                    return (
                       <div
-                        className="relative h-48 cursor-pointer overflow-hidden bg-slate-100"
-                        onClick={() => handleOpenFavoriteProduct(product)}
+                        key={product.id}
+                        className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                       >
-                        <img
-                          src={getPrimaryProductImage(product)}
-                          alt={product.name}
-                          className="h-full w-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleRemoveFavorite(product);
-                          }}
-                          className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-rose-500 shadow-sm transition hover:bg-white"
+                        <div
+                          className="relative h-48 cursor-pointer overflow-hidden bg-slate-100"
+                          onClick={() => handleOpenFavoriteProduct(product)}
                         >
-                          <Heart size={18} fill="currentColor" />
-                        </button>
-                        {isPreorder ? (
-                          <span className="absolute left-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
-                            Đặt trước
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="space-y-4 p-5">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            {product.brand || "EyeCare"}
-                          </p>
-                          <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-slate-900">
-                            {product.name}
-                          </h3>
-                          <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
-                            {product.description || "Sản phẩm bạn đã đánh dấu yêu thích."}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-xl font-bold text-slate-900">
-                            {Number(product.basePrice || 0).toLocaleString("vi-VN")}đ
-                          </span>
-
+                          <img
+                            src={getPrimaryProductImage(product)}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
                           <button
                             type="button"
-                            onClick={() => handleOpenFavoriteProduct(product)}
-                            className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRemoveFavorite(product);
+                            }}
+                            className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-rose-500 shadow-sm transition hover:bg-white"
                           >
-                            {isPreorder ? (
-                              <ShoppingCart size={16} />
-                            ) : (
-                              <EyeIcon size={16} />
-                            )}
-                            {isPreorder ? "Đặt trước" : "Xem chi tiết"}
+                            <Heart size={18} fill="currentColor" />
                           </button>
+                          {isPreorder ? (
+                            <span className="absolute left-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+                              Đặt trước
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-4 p-5">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                              {product.brand || "EyeCare"}
+                            </p>
+                            <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-slate-900">
+                              {product.name}
+                            </h3>
+                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
+                              {product.description || "Sản phẩm bạn đã đánh dấu yêu thích."}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-xl font-bold text-slate-900">
+                              {Number(product.basePrice || 0).toLocaleString("vi-VN")}đ
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenFavoriteProduct(product)}
+                              className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+                            >
+                              {isPreorder ? (
+                                <ShoppingCart size={16} />
+                              ) : (
+                                <EyeIcon size={16} />
+                              )}
+                              {isPreorder ? "Đặt trước" : "Xem chi tiết"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">
-                Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu lại.
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">
+                  Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu lại.
+                </div>
+              )}
             </div>
           )}
         </div>

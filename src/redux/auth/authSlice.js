@@ -81,6 +81,13 @@ function buildSessionUserFromToken(token) {
     .join(" ");
 
   return {
+    id:
+      payload.id ??
+      payload.userId ??
+      payload.user_id ??
+      payload.nameid ??
+      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ??
+      null,
     email,
     role: payload.role ?? null,
     fullName: normalizedDisplayName || email || "Tài khoản",
@@ -120,6 +127,7 @@ function normalizeUserProfile(user) {
 
   return {
     ...user,
+    id: user.id ?? user.userId ?? user.user_id ?? user.userID ?? null,
     fullName: user.fullName ?? user.full_name ?? user.name ?? "",
     email: user.email ?? user.username ?? "",
     phone: user.phone ?? user.phoneNumber ?? user.phone_number ?? "",
@@ -347,19 +355,25 @@ export const updateProfile = createAsyncThunk(
     try {
       const payload = {
         fullName: data.fullName,
+        full_name: data.fullName,
         phone: data.phone,
+        phone_number: data.phone,
         address: data.address,
         addressDetail: data.addressDetail,
+        address_detail: data.addressDetail,
         provinceCode: data.provinceCode,
         provinceName: data.provinceName,
+        province_name: data.provinceName,
         districtCode: data.districtCode,
         districtName: data.districtName,
+        district_name: data.districtName,
         wardCode: data.wardCode,
         wardName: data.wardName,
+        ward_name: data.wardName,
       };
 
-      persistStructuredAddress(id, payload);
       const updatedProfile = await persistProfileUpdate(id, payload);
+      persistStructuredAddress(id, payload);
       return mergeSubmittedAddress(updatedProfile, payload);
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Cập nhật thông tin thất bại. Vui lòng thử lại."));

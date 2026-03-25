@@ -1,6 +1,5 @@
-/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Search, ShoppingCart, Glasses, User, Bell, X, ArrowUpRight, Menu } from "lucide-react";
+import { Search, ShoppingCart, Glasses, User, Bell, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
@@ -14,6 +13,8 @@ import {
 import { appToast } from "../../utils/appToast";
 import { getRoleDisplayLabel, isStaffRole } from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
+import { ORDER_PHASE } from "../../utils/orderHistory";
+import { readStaffIntakeOrders, readStaffOrdersByPhase } from "../../utils/staffOrders";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -146,26 +147,22 @@ export function Header() {
 
   const [dropDownMenu, setDropDownMenu] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
-  const [openStaffMenu, setOpenStaffMenu] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [staffTaskCounts, setStaffTaskCounts] = useState(() => ({
+    "order-intake": readStaffIntakeOrders().length,
+    "prescription-support": readStaffOrdersByPhase(ORDER_PHASE.PRESCRIPTION_REVIEW).length,
+    "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING).length,
+    "after-sales": 0,
+  }));
   const notificationRef = useRef(null);
   const searchRef = useRef(null);
-  const staffMenuRef = useRef(null);
 
   const unreadCount = notifications.filter((item) => !item.read).length;
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
   const isOrderTrackingPage = location.pathname === "/user/orders";
-  const activeOrderTab =
-    new URLSearchParams(location.search).get("tab") || "tat-ca";
+  const activeOrderTab = new URLSearchParams(location.search).get("tab") || "tat-ca";
   const staffOnly = isStaffRole(user?.role);
-  const staffTaskItems = [
-    "Tiếp nhận và xử lý đơn hàng",
-    "Kiểm tra các thông số prescription và liên hệ hỗ trợ khách hàng điều chỉnh",
-    "Xác nhận đơn, chuyển cho bộ phận Operations Staff để giao vận và gia công/làm kính",
-    "Xử lý đơn pre-order",
-    "Xử lý khiếu nại: đổi trả, bảo hành, hoàn tiền",
-  ];
 
   useEffect(() => {
     if (!products.length) {
@@ -179,11 +176,14 @@ export function Header() {
         id: `product-${product.id}`,
         type: "product",
         title: product.name,
-        description: `${product.brand || "EyeCare"}${product.description ? ` • ${product.description}` : ""}`,
+        description: `${product.brand || "EyeCare"}${
+          product.description ? ` • ${product.description}` : ""
+        }`,
         href: `/products/${product.id}`,
         requiresAuth: false,
-        rawSearch:
-          `${product.name} ${product.brand || ""} ${product.description || ""} ${product.id}`.trim(),
+        rawSearch: `${product.name} ${product.brand || ""} ${product.description || ""} ${
+          product.id
+        }`.trim(),
       })),
     [products]
   );
@@ -205,7 +205,7 @@ export function Header() {
     return allItems
       .filter((item) => normalizeSearchValue(item.rawSearch).includes(normalizedKeyword))
       .slice(0, 8);
-  }, [featureSearchItems, productSearchItems, searchKeyword]);
+  }, [productSearchItems, searchKeyword]);
 
   function toogleDropDownMeni(curr) {
     setDropDownMenu(!curr);
@@ -260,7 +260,6 @@ export function Header() {
 
   function handleStaffTaskNavigate(href) {
     navigate(href);
-    setOpenStaffMenu(false);
   }
 
   function handleSearchSubmit(event) {
@@ -285,25 +284,50 @@ export function Header() {
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(event.target)
-      ) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setOpenNotifications(false);
       }
 
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setIsSearchFocused(false);
       }
-
-      if (staffMenuRef.current && !staffMenuRef.current.contains(event.target)) {
-        setOpenStaffMenu(false);
-      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!staffOnly) {
+      return undefined;
+    }
+
+    function syncStaffTaskCounts() {
+      setStaffTaskCounts({
+        "order-intake": readStaffIntakeOrders().length,
+        "prescription-support": readStaffOrdersByPhase(ORDER_PHASE.PRESCRIPTION_REVIEW).length,
+        "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING).length,
+        "after-sales": 0,
+      });
+    }
+
+    syncStaffTaskCounts();
+
+    const intervalId = window.setInterval(syncStaffTaskCounts, 1500);
+
+    function handleStorage(event) {
+      if (!event.key || event.key.startsWith("order-history:")) {
+        syncStaffTaskCounts();
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [staffOnly]);
 
   function formatNotificationTime(createdAt) {
     const date = new Date(createdAt);
@@ -370,9 +394,7 @@ export function Header() {
                           className="flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
                         >
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-900">
-                              {item.title}
-                            </p>
+                            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                             <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                               {item.description}
                             </p>
@@ -400,16 +422,9 @@ export function Header() {
 
               {isAuthenticated ? (
                 <div className="relative">
-                  <div
-                    className="flex flex-col leading-tight"
-                    onClick={() => toogleDropDownMeni(dropDownMenu)}
-                  >
-                    <span className="text-sm font-medium">
-                      Xin chào, {user.fullName}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {getRoleDisplayLabel(user.role)}
-                    </span>
+                  <div className="flex flex-col leading-tight" onClick={() => toogleDropDownMeni(dropDownMenu)}>
+                    <span className="text-sm font-medium">Xin chào, {user.fullName}</span>
+                    <span className="text-xs text-gray-500">{getRoleDisplayLabel(user.role)}</span>
                     <DropDownMenu
                       openMenu={dropDownMenu}
                       setOpenMenu={setDropDownMenu}
@@ -450,18 +465,14 @@ export function Header() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            Thông báo
-                          </h3>
+                          <h3 className="text-lg font-semibold text-slate-900">Thông báo</h3>
                           {unreadCount > 0 && (
                             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                               {unreadCount} mới
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Mới đây và chỉ lưu trong 30 ngày
-                        </p>
+                        <p className="mt-1 text-xs text-slate-500">Mới đây và chỉ lưu trong 30 ngày</p>
                       </div>
 
                       <button
@@ -475,9 +486,7 @@ export function Header() {
                   </div>
 
                   {recentNotifications.length === 0 ? (
-                    <div className="px-5 py-8 text-sm text-slate-500">
-                      Chưa có thông báo nào.
-                    </div>
+                    <div className="px-5 py-8 text-sm text-slate-500">Chưa có thông báo nào.</div>
                   ) : (
                     <div className="max-h-[420px] overflow-y-auto bg-white">
                       <div className="px-5 pb-2 pt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -488,9 +497,7 @@ export function Header() {
                         <div
                           key={item.id}
                           className={`mx-3 mb-2 flex gap-3 rounded-2xl border px-4 py-3 transition-colors ${
-                            item.read
-                              ? "border-slate-100 bg-white"
-                              : "border-teal-100 bg-teal-50/60"
+                            item.read ? "border-slate-100 bg-white" : "border-teal-100 bg-teal-50/60"
                           }`}
                         >
                           <div
@@ -529,57 +536,8 @@ export function Header() {
               )}
             </div>
 
-            {staffOnly ? (
-              <div className="relative" ref={staffMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setOpenStaffMenu((prev) => !prev)}
-                  className="rounded-full p-2 text-gray-600 transition-colors hover:bg-white hover:text-teal-600"
-                >
-                  <Menu className="h-6 w-6" />
-                </button>
-
-                {openStaffMenu && (
-                  <div className="absolute right-0 top-full z-[300] mt-4 w-[400px] max-h-[calc(100vh-110px)] overflow-hidden rounded-3xl border border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl">
-                    <div className="border-b border-slate-100 bg-gradient-to-r from-teal-50 via-white to-sky-50 px-5 py-3">
-                      <h3 className="text-lg font-semibold text-slate-900">Bảng chức năng nhân viên</h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Các nhóm nghiệp vụ chính cho Sales Staff trong ca làm việc.
-                      </p>
-                    </div>
-
-                    <div className="staff-menu-scroll max-h-[calc(100vh-190px)] overflow-y-auto bg-slate-50/80 px-4 py-3 pr-2">
-                      <div className="flex flex-col gap-3 pb-6">
-                      {sharedStaffTaskItems.map((task, index) => (
-                        <button
-                          key={task.id}
-                          type="button"
-                          onClick={() => handleStaffTaskNavigate(task.href)}
-                          className="block w-full rounded-[22px] border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold leading-5 text-slate-800">
-                                {index + 1}. {task.title}
-                              </p>
-                              <p className="mt-1 text-sm leading-6 text-slate-500">
-                                {task.description}
-                              </p>
-                            </div>
-                            <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
-                          </div>
-                        </button>
-                      ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Tooltip
-                title="Xem tất cả sản phẩm trong giỏ hàng"
-                onClick={handleCartClick}
-              >
+            {!staffOnly && (
+              <Tooltip title="Xem tất cả sản phẩm trong giỏ hàng" onClick={handleCartClick}>
                 <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
                   <ShoppingCart className="h-6 w-6" />
 
@@ -633,6 +591,40 @@ export function Header() {
                 <span className="absolute inset-x-0 -bottom-3 h-0.5 origin-left scale-x-0 bg-teal-600 transition-transform duration-200 group-hover:scale-x-100" />
               </button>
             ))}
+          </nav>
+        )}
+
+        {!isOrderTrackingPage && staffOnly && (
+          <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
+            {sharedStaffTaskItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              const taskCount = staffTaskCounts[item.id] || 0;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleStaffTaskNavigate(item.href)}
+                  className={`group relative cursor-pointer text-3xl font-medium transition-colors ${
+                    isActive ? "text-teal-600" : "text-gray-700 hover:text-teal-600"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-3">
+                    <span>{item.shortLabel || item.title}</span>
+                    {taskCount > 0 ? (
+                      <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-rose-500 px-2 text-sm font-bold text-white shadow-sm">
+                        {taskCount}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={`absolute inset-x-0 -bottom-3 h-0.5 origin-left bg-teal-600 transition-transform duration-200 ${
+                      isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                    }`}
+                  />
+                </button>
+              );
+            })}
           </nav>
         )}
       </div>
