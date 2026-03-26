@@ -247,7 +247,7 @@ async function persistProfileUpdate(id, payload) {
     try {
       await request();
       const refreshedProfile = await api.get("/user/profile");
-      return refreshedProfile.data;
+      return normalizeUserProfile(refreshedProfile.data);
     } catch (error) {
       lastError = error;
 
@@ -298,6 +298,9 @@ function mergeSubmittedAddress(profile, payload) {
   };
 }
 
+
+
+
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
     const payload = {
@@ -336,7 +339,7 @@ export const registerUser = createAsyncThunk("/auth/register", async (values, { 
 export const fetchProfile = createAsyncThunk("/user/profile", async (_, { rejectWithValue }) => {
   try {
     const response = await api.get("/user/profile");
-    return response.data;
+    return normalizeUserProfile(response.data);
   } catch (error) {
     if (error.response?.status === 403) {
       return rejectWithValue({

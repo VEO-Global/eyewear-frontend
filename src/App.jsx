@@ -12,6 +12,7 @@ function App() {
     if (token) {
       dispatch(restoreSessionFromToken(token));
       dispatch(fetchProfile());
+      
     }
   }, [dispatch]);
 

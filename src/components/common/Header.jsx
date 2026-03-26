@@ -423,8 +423,8 @@ export function Header() {
               {isAuthenticated ? (
                 <div className="relative">
                   <div className="flex flex-col leading-tight" onClick={() => toogleDropDownMeni(dropDownMenu)}>
-                    <span className="text-sm font-medium">Xin chào, {user.fullName}</span>
-                    <span className="text-xs text-gray-500">{getRoleDisplayLabel(user.role)}</span>
+                    <span className="text-sm font-medium">Xin chào, {user?.fullName}</span>
+                    <span className="text-xs text-gray-500">{getRoleDisplayLabel(user?.role)}</span>
                     <DropDownMenu
                       openMenu={dropDownMenu}
                       setOpenMenu={setDropDownMenu}

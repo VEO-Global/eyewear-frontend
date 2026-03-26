@@ -21,7 +21,7 @@ import {
 } from "../utils/userAddress";
 import { isPreorderProduct } from "../utils/productCatalog";
 import { getPrimaryProductImage } from "../utils/productImages";
-import { getRoleDisplayLabel, isStaffRole } from "../utils/authRole";
+import { getRoleDisplayLabel } from "../utils/authRole";
 
 const emptyShippingAddress = {
   provinceCode: undefined,
@@ -41,6 +41,18 @@ function getUserId(user) {
   return user?.id ?? user?.userId ?? user?.user_id ?? user?.userID ?? null;
 }
 
+function getUserIdLabel(role) {
+  if (role === "ADMIN") {
+    return "Mã quản trị viên";
+  }
+
+  if (role === "SALES") {
+    return "Mã nhân viên";
+  }
+
+  return "Mã khách hàng";
+}
+
 function getAccountStatusLabel(user) {
   if (user?.isActive === true) {
     return "Tài khoản đang hoạt động";
@@ -51,6 +63,10 @@ function getAccountStatusLabel(user) {
   }
 
   return "Chưa đồng bộ trạng thái tài khoản";
+}
+
+function canViewFavoriteSection(role) {
+  return role === "CUSTOMER";
 }
 
 function buildProfileFormState(user) {
@@ -108,6 +124,7 @@ export default function UserProfilePage() {
   const { user, loading } = useSelector((state) => state.auth);
   const favoriteItems = useSelector((state) => state.favorites.items);
   const [isEditing, setIsEditing] = useState(false);
+
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
@@ -116,6 +133,7 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+
     if (token) {
       dispatch(fetchProfile());
     }
@@ -129,7 +147,8 @@ export default function UserProfilePage() {
     () => formatCheckoutAddress(formData.shippingAddress),
     [formData.shippingAddress]
   );
-  const isStaffUser = isStaffRole(user?.role);
+  const userRole = user?.role;
+  const canViewFavorites = canViewFavoriteSection(userRole);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -265,13 +284,10 @@ export default function UserProfilePage() {
           </div>
 
           <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <SummaryCard
-              label={isStaffUser ? "Mã nhân viên" : "Mã khách hàng"}
-              value={getUserId(user) || "--"}
-            />
+            <SummaryCard label={getUserIdLabel(userRole)} value={getUserId(user) || "--"} />
             <SummaryCard label="Họ và tên" value={user?.fullName || "Chưa cập nhật"} />
             <SummaryCard label="Số điện thoại" value={getUserPhone(user) || "Chưa cập nhật"} />
-            <SummaryCard label="Vai trò" value={getRoleDisplayLabel(user?.role)} />
+            <SummaryCard label="Vai trò" value={getRoleDisplayLabel(userRole)} />
             <SummaryCard label="Email" value={user?.email || "Chưa cập nhật"} compact />
           </div>
 
@@ -282,8 +298,9 @@ export default function UserProfilePage() {
                   Thông tin cá nhân
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  Cập nhật họ tên, số điện thoại và địa chỉ để hệ thống hỗ trợ nhanh hơn. Staff
-                  và customer dùng chung một luồng dữ liệu profile.
+                  Cập nhật họ tên, số điện thoại và địa chỉ để hệ thống hỗ trợ nhanh hơn.
+                  Tất cả role dùng chung một trang profile, chỉ khác một vài nội dung hiển thị
+                  theo quyền.
                 </p>
               </div>
 
@@ -381,7 +398,7 @@ export default function UserProfilePage() {
             </form>
           </div>
 
-          {!isStaffUser && (
+          {canViewFavorites && (
             <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -389,7 +406,8 @@ export default function UserProfilePage() {
                     Sản phẩm bạn đã yêu thích
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                    Danh sách này lưu các mẫu kính bạn đã bấm tim để quay lại xem nhanh sau này.
+                    Danh sách này lưu các mẫu kính bạn đã bấm tim để quay lại xem nhanh sau
+                    này.
                   </p>
                 </div>
 
@@ -444,7 +462,8 @@ export default function UserProfilePage() {
                               {product.name}
                             </h3>
                             <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
-                              {product.description || "Sản phẩm bạn đã đánh dấu yêu thích."}
+                              {product.description ||
+                                "Sản phẩm bạn đã đánh dấu yêu thích."}
                             </p>
                           </div>
 
@@ -473,7 +492,8 @@ export default function UserProfilePage() {
                 </div>
               ) : (
                 <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">
-                  Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu lại.
+                  Bạn chưa có sản phẩm yêu thích nào. Bấm vào nút tim ở trang sản phẩm để lưu
+                  lại.
                 </div>
               )}
             </div>
