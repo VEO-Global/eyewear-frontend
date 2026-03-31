@@ -6,17 +6,30 @@ import { CustomGlassesProcess } from "../components/homepage/CustomGlassesProces
 import { WhyChooseUs } from "../components/homepage/WhyChooseUs";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllCategories } from "../redux/category/categorySlice";
-import { isStaffRole } from "../utils/authRole";
+import { isManagerRole, isStaffRole } from "../utils/authRole";
+import { useNavigate } from "react-router-dom";
 // import ProductionGrid from "../components/homepage/ProductionGrid";
 
 export default function HomePages() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const userRole = useSelector((state) => state.auth.user?.role);
   const staffOnly = isStaffRole(userRole);
+  const managerOnly = isManagerRole(userRole);
 
   useEffect(() => {
     dispatch(fetchAllCategories());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (managerOnly) {
+      navigate("/manager/dashboard", { replace: true });
+    }
+  }, [managerOnly, navigate]);
+
+  if (managerOnly) {
+    return null;
+  }
 
   return (
     <div>

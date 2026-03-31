@@ -13,9 +13,13 @@ import { Scroll } from "lucide-react";
 import ScrollToTop from "../components/common/ScrollToTop";
 import CartPage from "../pages/CartPage";
 import PaymentPage from "../pages/PaymentPage";
+import PoliciesPage from "../pages/PoliciesPage";
 import UserProfilePage from "../pages/UserProfilePage";
 import PreOrderPage from "../pages/PreOrderPage";
 import AdminDashBoard from "../pages/AdminDashBoard";
+import ManagerDashboard from "../pages/ManagerDashboard";
+import ManagerProductUpdatePage from "../pages/ManagerProductUpdatePage";
+import ManagerWorkspacePage from "../pages/ManagerWorkspacePage";
 import CustomGlassesPage from "../pages/CustomGlassesPage";
 import VisionTestPage from "../pages/VisionTestPage";
 import OrderTrackingPage from "../pages/OrderTrackingPage";
@@ -23,6 +27,8 @@ import StaffOrderIntakePage from "../pages/staff/StaffOrderIntakePage";
 import StaffPrescriptionSupportPage from "../pages/staff/StaffPrescriptionSupportPage";
 import StaffOperationsHandoffPage from "../pages/staff/StaffOperationsHandoffPage";
 import StaffAfterSalesPage from "../pages/staff/StaffAfterSalesPage";
+import { Header } from "../components/common/Header";
+import { Footer } from "../components/common/Footer";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -55,6 +61,14 @@ function AnimatedRoutes() {
               element={
                 <PageWrapper>
                   <ProductDetail />
+                </PageWrapper>
+              }
+            />
+            <Route
+              path="/policies"
+              element={
+                <PageWrapper>
+                  <PoliciesPage />
                 </PageWrapper>
               }
             />
@@ -97,6 +111,55 @@ function AnimatedRoutes() {
             {/* Admin Route */}
             <Route path="/admin/dashboard" element={<AdminDashBoard />}></Route>
           </Route>
+
+          <Route
+            path="/manager/dashboard"
+            element={
+              <>
+                <Header />
+                <PageWrapper>
+                  <ManagerDashboard />
+                </PageWrapper>
+                <Footer />
+              </>
+            }
+          ></Route>
+          <Route
+            path="/manager/workspace"
+            element={
+              <>
+                <Header />
+                <PageWrapper>
+                  <ManagerWorkspacePage />
+                </PageWrapper>
+                <Footer />
+              </>
+            }
+          ></Route>
+          <Route
+            path="/manager/products/new"
+            element={
+              <>
+                <Header />
+                <PageWrapper>
+                  <ManagerProductUpdatePage />
+                </PageWrapper>
+                <Footer />
+              </>
+            }
+          ></Route>
+          <Route
+            path="/manager/products/:id/edit"
+            element={
+              <>
+                <Header />
+                <PageWrapper>
+                  <ManagerProductUpdatePage />
+                </PageWrapper>
+                <Footer />
+              </>
+            }
+          ></Route>
         </Routes>
       </AnimatePresence>
     </>

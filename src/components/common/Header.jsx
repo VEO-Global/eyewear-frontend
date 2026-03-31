@@ -11,7 +11,7 @@ import {
   removeNotification,
 } from "../../redux/notification/notificationSlice";
 import { appToast } from "../../utils/appToast";
-import { getRoleDisplayLabel, isStaffRole } from "../../utils/authRole";
+import { getRoleDisplayLabel, isManagerRole, isStaffRole } from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
 import { ORDER_PHASE } from "../../utils/orderHistory";
 import { readStaffIntakeOrders, readStaffOrdersByPhase } from "../../utils/staffOrders";
@@ -163,6 +163,7 @@ export function Header() {
   const isOrderTrackingPage = location.pathname === "/user/orders";
   const activeOrderTab = new URLSearchParams(location.search).get("tab") || "tat-ca";
   const staffOnly = isStaffRole(user?.role);
+  const managerOnly = isManagerRole(user?.role);
 
   useEffect(() => {
     if (!products.length) {
@@ -536,7 +537,7 @@ export function Header() {
               )}
             </div>
 
-            {!staffOnly && (
+            {!staffOnly && !managerOnly && (
               <Tooltip title="Xem tất cả sản phẩm trong giỏ hàng" onClick={handleCartClick}>
                 <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
                   <ShoppingCart className="h-6 w-6" />
@@ -579,7 +580,7 @@ export function Header() {
           </div>
         )}
 
-        {!isOrderTrackingPage && !staffOnly && (
+        {!isOrderTrackingPage && !staffOnly && !managerOnly && (
           <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
             {navItems.map((item) => (
               <button

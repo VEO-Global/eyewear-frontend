@@ -85,7 +85,7 @@ export function ProductCard({ product }) {
 
         <div className="mb-4 grow">
           <span className="text-xl font-bold">
-            {Number(product.basePrice || 0).toLocaleString("vi-VN")} ₫
+            {Number(product.basePrice || 0).toLocaleString("vi-VN")} VND
           </span>
           <p className="mt-2 text-sm text-gray-500">
             {availability === "preorder"

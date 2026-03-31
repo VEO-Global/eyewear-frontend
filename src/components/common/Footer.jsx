@@ -1,64 +1,53 @@
-import React from "react";
-import {
-  Facebook,
-  Instagram,
-  Mail,
-  MapPin,
-  Phone,
-  Youtube,
-} from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Youtube } from "lucide-react";
+import { Link } from "react-router-dom";
+
+const policyLinks = [
+  { label: "Chính sách mua hàng", href: "/policies#purchase" },
+  { label: "Chính sách bảo hành", href: "/policies#warranty" },
+  { label: "Chính sách đổi trả", href: "/policies#return" },
+  { label: "Vận chuyển & Giao nhận", href: "/policies#shipping" },
+  { label: "Bảo mật thông tin", href: "/policies#privacy" },
+];
+
 export function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-300 pt-16 pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-          {/* Store Info */}
+    <footer className="bg-gray-900 pb-8 pt-16 text-gray-300">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-12 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
-            <h3 className="text-xl font-bold text-white mb-4">EyeCare Store</h3>
+            <h3 className="mb-4 text-xl font-bold text-white">EyeCare Store</h3>
             <p className="text-sm leading-relaxed text-gray-400">
-              Hệ thống kính mắt uy tín hàng đầu Việt Nam. Chúng tôi cam kết mang
-              lại giải pháp thị lực tốt nhất cho đôi mắt của bạn.
+              Hệ thống kính mắt uy tín hàng đầu Việt Nam. Chúng tôi cam kết mang lại giải pháp thị lực
+              tốt nhất cho đôi mắt của bạn.
             </p>
             <div className="flex items-start gap-3 pt-2">
-              <MapPin className="h-5 w-5 text-teal-500 flex-shrink-0 mt-0.5" />
-              <span className="text-sm">
-                123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh
-              </span>
+              <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-500" />
+              <span className="text-sm">123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh</span>
             </div>
           </div>
 
-          {/* Policies */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-6">
-              Chính sách
-            </h3>
+            <h3 className="mb-6 text-lg font-semibold text-white">Chính sách</h3>
             <ul className="space-y-3">
-              {[
-                "Chính sách mua hàng",
-                "Chính sách bảo hành",
-                "Chính sách đổi trả",
-                "Vận chuyển & Giao nhận",
-                "Bảo mật thông tin",
-              ].map((item) => (
-                <li key={item}>
-                  <a
-                    href="#"
-                    className="text-sm hover:text-teal-400 transition-colors flex items-center gap-2 group"
+              {policyLinks.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    to={item.href}
+                    className="group flex items-center gap-2 text-sm transition-colors hover:text-teal-400"
                   >
-                    <span className="h-1 w-1 bg-gray-500 rounded-full group-hover:bg-teal-400 transition-colors" />
-                    {item}
-                  </a>
+                    <span className="h-1 w-1 rounded-full bg-gray-500 transition-colors group-hover:bg-teal-400" />
+                    {item.label}
+                  </Link>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Contact */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-6">Liên hệ</h3>
+            <h3 className="mb-6 text-lg font-semibold text-white">Liên hệ</h3>
             <ul className="space-y-4">
               <li className="flex items-center gap-3">
-                <div className="bg-gray-800 p-2 rounded-full">
+                <div className="rounded-full bg-gray-800 p-2">
                   <Phone className="h-5 w-5 text-teal-500" />
                 </div>
                 <div>
@@ -67,7 +56,7 @@ export function Footer() {
                 </div>
               </li>
               <li className="flex items-center gap-3">
-                <div className="bg-gray-800 p-2 rounded-full">
+                <div className="rounded-full bg-gray-800 p-2">
                   <Mail className="h-5 w-5 text-teal-500" />
                 </div>
                 <div>
@@ -78,18 +67,15 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Social */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-6">Kết nối</h3>
-            <p className="text-sm text-gray-400 mb-4">
-              Theo dõi chúng tôi để nhận ưu đãi mới nhất
-            </p>
+            <h3 className="mb-6 text-lg font-semibold text-white">Kết nối</h3>
+            <p className="mb-4 text-sm text-gray-400">Theo dõi chúng tôi để nhận ưu đãi mới nhất</p>
             <div className="flex gap-4">
               {[Facebook, Instagram, Youtube].map((Icon, idx) => (
                 <a
                   key={idx}
                   href="#"
-                  className="bg-gray-800 p-2.5 rounded-lg hover:bg-teal-600 hover:text-white transition-all duration-300 transform hover:-translate-y-1"
+                  className="transform rounded-lg bg-gray-800 p-2.5 transition-all duration-300 hover:-translate-y-1 hover:bg-teal-600 hover:text-white"
                 >
                   <Icon className="h-5 w-5" />
                 </a>
@@ -98,29 +84,18 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-gray-500">
-            © 2024 EyeCare Store. All rights reserved.
-          </p>
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-800 pt-8 md:flex-row">
+          <p className="text-sm text-gray-500">© 2024 EyeCare Store. All rights reserved.</p>
           <div className="flex gap-6">
-            <a
-              href="#"
-              className="text-sm text-gray-500 hover:text-white transition-colors"
-            >
+            <Link to="/policies#purchase" className="text-sm text-gray-500 transition-colors hover:text-white">
               Điều khoản
-            </a>
-            <a
-              href="#"
-              className="text-sm text-gray-500 hover:text-white transition-colors"
-            >
+            </Link>
+            <Link to="/policies#privacy" className="text-sm text-gray-500 transition-colors hover:text-white">
               Riêng tư
-            </a>
-            <a
-              href="#"
-              className="text-sm text-gray-500 hover:text-white transition-colors"
-            >
+            </Link>
+            <Link to="/policies" className="text-sm text-gray-500 transition-colors hover:text-white">
               Sitemap
-            </a>
+            </Link>
           </div>
         </div>
       </div>

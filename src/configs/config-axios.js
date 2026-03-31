@@ -25,6 +25,33 @@ const api = axios.create({
   },
 });
 
+export const publicApi = axios.create({
+  baseURL: normalizeApiBaseUrl(import.meta.env.VITE_API_URL),
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+function getRequestPath(config) {
+  const rawUrl = config?.url;
+
+  if (!rawUrl || typeof rawUrl !== "string") {
+    return "";
+  }
+
+  try {
+    const parsedUrl = rawUrl.startsWith("http") ? new URL(rawUrl) : new URL(rawUrl, api.defaults.baseURL);
+    return parsedUrl.pathname || "";
+  } catch {
+    return rawUrl;
+  }
+}
+
+function isPublicRequest(config) {
+  const requestPath = getRequestPath(config);
+  return requestPath.includes("/public/");
+}
+
 // REQUEST INTERCEPTOR
 api.interceptors.request.use(
   (config) => {
@@ -43,6 +70,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const hasToken = Boolean(localStorage.getItem("token"));
+
     // network error
     if (!error.response) {
       console.error("Network error:", error);
@@ -50,7 +79,7 @@ api.interceptors.response.use(
     }
 
     // token expired
-    if (error.response.status === 401) {
+    if (error.response.status === 401 && hasToken && !isPublicRequest(error.config)) {
       localStorage.removeItem("token");
       window.location.href = "/auth/login";
     }

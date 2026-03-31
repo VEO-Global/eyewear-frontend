@@ -10,8 +10,11 @@ function resolvePostLoginPath(role) {
   switch (role) {
     case "ADMIN":
       return "/admin/dashboard";
-    case "CUSTOMER":
+    case "MANAGER":
+      return "/manager/dashboard";
     case "SALES":
+      return "/";
+    case "CUSTOMER":
     default:
       return "/";
   }

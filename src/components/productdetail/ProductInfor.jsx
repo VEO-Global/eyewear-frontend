@@ -30,7 +30,7 @@ export function ProductInfo({
       </div>
 
       <div className="text-3xl font-light text-black">
-        {Number(price || 0).toLocaleString("vi-VN")}₫
+        {Number(price || 0).toLocaleString("vi-VN")}VND
       </div>
 
       <p className="text-base leading-relaxed text-gray-600 text-pretty">

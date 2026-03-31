@@ -1,11 +1,11 @@
 import { LogOut, PackageSearch, UserCircle } from "lucide-react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { isStaffRole } from "../../utils/authRole";
+import { isCustomerFacingRole } from "../../utils/authRole";
 
 export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
   const { user } = useSelector((state) => state.auth);
-  const staffOnly = isStaffRole(user?.role);
+  const canTrackOrders = isCustomerFacingRole(user?.role) || user?.role === "CUSTOMER";
 
   if (!openMenu) return null;
 
@@ -22,7 +22,7 @@ export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
         Xem thông tin cá nhân
       </Link>
 
-      {!staffOnly && (
+      {canTrackOrders && (
         <Link
           to="/user/orders"
           className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100"
