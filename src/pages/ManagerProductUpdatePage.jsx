@@ -518,8 +518,8 @@ export default function ManagerProductUpdatePage() {
                 <Form.Item name="catalogType" label="Loại catalog">
                   <Select
                     options={[
-                      { label: "New", value: "NEW" },
-                      { label: "Old", value: "OLD" },
+                      { label: "Cho phép đặt trước", value: "NEW" },
+                      { label: "Không cho phép đặt trước", value: "OLD" },
                     ]}
                     placeholder="Chọn loại catalog"
                   />
