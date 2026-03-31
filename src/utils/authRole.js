@@ -1,5 +1,5 @@
 export function isCustomerFacingRole(role) {
-  return role === "CUSTOMER" || role === "SALES";
+  return role === "CUSTOMER";
 }
 
 export function isStaffRole(role) {

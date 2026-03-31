@@ -163,6 +163,9 @@ export function Header() {
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
   const isOrderTrackingPage = location.pathname === "/user/orders";
   const activeOrderTab = new URLSearchParams(location.search).get("tab") || "tat-ca";
+  const adminOnly = user?.role === "ADMIN" || location.pathname.startsWith("/admin");
+  const customerOnly = user?.role === "CUSTOMER";
+  const shouldShowSearch = !isAuthenticated || customerOnly;
   const staffOnly = isStaffRole(user?.role);
   const managerOnly = isManagerRole(user?.role);
 
@@ -402,7 +405,7 @@ export function Header() {
             </Link>
           </div>
 
-          <div className="mx-8 hidden max-w-lg flex-1 lg:flex">
+          {shouldShowSearch && <div className="mx-8 hidden max-w-lg flex-1 lg:flex">
             <div className="group relative w-full" ref={searchRef}>
               <input
                 type="text"
@@ -456,7 +459,7 @@ export function Header() {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           <div className="hidden items-center gap-4 lg:flex">
             <div className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-gray-600 transition-colors hover:bg-gray-50 hover:text-teal-600">
@@ -578,7 +581,7 @@ export function Header() {
               )}
             </div>
 
-            {!staffOnly && !managerOnly && (
+            {!adminOnly && !staffOnly && !managerOnly && (
               <Tooltip title="Xem tất cả sản phẩm trong giỏ hàng" onClick={handleCartClick}>
                 <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
                   <ShoppingCart className="h-6 w-6" />
@@ -621,7 +624,7 @@ export function Header() {
           </div>
         )}
 
-        {!isOrderTrackingPage && !staffOnly && !managerOnly && (
+        {!adminOnly && !isOrderTrackingPage && !staffOnly && !managerOnly && (
           <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
             {navItems.map((item) => (
               <button

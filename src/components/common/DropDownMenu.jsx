@@ -5,7 +5,7 @@ import { isCustomerFacingRole } from "../../utils/authRole";
 
 export default function DropDownMenu({ openMenu, setOpenMenu, handleLogout }) {
   const { user } = useSelector((state) => state.auth);
-  const canTrackOrders = isCustomerFacingRole(user?.role) || user?.role === "CUSTOMER";
+  const canTrackOrders = isCustomerFacingRole(user?.role);
 
   if (!openMenu) return null;
 
