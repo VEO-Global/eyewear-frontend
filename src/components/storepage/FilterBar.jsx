@@ -12,37 +12,16 @@ export default function FilterBar({
   onReset,
   refreshing = false,
 }) {
+  console.log(categories);
+
   const categoryOptions = useMemo(() => {
     if (categories.length) {
-      return categories
-        .map((item) => ({
-          value: String(item.id ?? item.code ?? item.name ?? ""),
-          label: item.name ?? "",
-        }))
-        .filter((item) => item.value && item.label);
+      return categories.map((item) => ({
+        value: item.id,
+        label: item.name,
+      }));
     }
-
-    return [
-      ...new Set(
-        products
-          .map((item) => {
-            if (typeof item.category === "string") {
-              return item.category;
-            }
-
-            if (item.category && typeof item.category === "object") {
-              return item.category.name || item.category.categoryName || "";
-            }
-
-            return item.categoryName || "";
-          })
-          .filter(Boolean)
-      ),
-    ].map((item) => ({
-      value: item,
-      label: item,
-    }));
-  }, [categories, products]);
+  }, [categories]);
 
   const statuses = useMemo(
     () => [

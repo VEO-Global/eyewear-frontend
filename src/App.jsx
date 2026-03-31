@@ -1,28 +1,35 @@
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import AppRouter from "./router/AppRouter";
-<<<<<<< HEAD
 
 import { fetchProfile } from "./redux/auth/authSlice";
-import { useEffect } from "react";
 import { fetchProducts } from "./redux/products/producSlice";
 import { fetchAllCategories } from "./redux/category/categorySlice";
 import { fetchUsers } from "./redux/admin/adminSlice";
-=======
-import { fetchProfile, restoreSessionFromToken } from "./redux/auth/authSlice";
->>>>>>> bba5136de0ccd791eebf6942d13ab61497df7893
-
+import { fetchProvinces } from "./redux/location/locationSlice";
+import { fetchAllLens } from "./redux/lens/lensSlice";
+import { getMyCart } from "./redux/cart/cartSlice";
+import { getMyOrder } from "./redux/order/orderSlice";
 function App() {
   const dispatch = useDispatch();
-
-  if (token) {
-    dispatch(fetchProfile());
-  }
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      dispatch(fetchProfile()).then((res) => {
+        const role = res.payload?.role;
+
+        if (role === "ADMIN") {
+          dispatch(fetchUsers());
+        }
+      });
+    }
+    dispatch(getMyOrder());
     dispatch(fetchProducts());
     dispatch(fetchAllCategories());
-    dispatch(fetchUsers());
-  });
+    dispatch(fetchProvinces());
+    dispatch(fetchAllLens());
+    dispatch(getMyCart());
+  }, [dispatch]);
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900">

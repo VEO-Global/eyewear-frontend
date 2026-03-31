@@ -17,7 +17,6 @@ const initialState = {
 export const fetchProvinces = createAsyncThunk("location/fetchProvinces", async (_, { rejectWithValue }) => {
   try {
     const res = await api.get("/locations/provinces");
-
     return res.data;
   } catch (error) {
     return rejectWithValue(error.response?.data || "Fetch provinces failed");
@@ -71,6 +70,7 @@ const locationSlice = createSlice({
         state.loading = false;
         state.provinces = action.payload;
       })
+
       .addCase(fetchProvinces.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;

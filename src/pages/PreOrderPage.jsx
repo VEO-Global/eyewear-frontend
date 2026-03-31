@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowLeft, ShieldCheck, Sparkles } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import PreorderForm from "../form/PreorderForm";
 import {
   clearSelectedProduct,
-  fetchPreorderProducts,
   fetchProductById,
 } from "../redux/products/producSlice";
 import Product3DViewer from "../components/common/Model3dViewer";
 import { getPrimaryProductImage } from "../utils/productImages";
+import { Button, Tooltip } from "antd";
 
 function FeaturePill({ title, description }) {
   return (
@@ -22,7 +22,9 @@ function FeaturePill({ title, description }) {
 
 function ProductPreview({ product, className = "" }) {
   if (product?.model3dUrl) {
-    return <Product3DViewer modelUrl={product.model3dUrl} className={className} />;
+    return (
+      <Product3DViewer modelUrl={product.model3dUrl} className={className} />
+    );
   }
 
   return (
@@ -37,16 +39,13 @@ function ProductPreview({ product, className = "" }) {
 export default function PreorderPage() {
   const dispatch = useDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
   const { preorderProducts, selectedProduct, loading } = useSelector(
     (state) => state.products
   );
-  const [showProductDetail, setShowProductDetail] = useState(Boolean(selectedProduct));
-
-  useEffect(() => {
-    if (!preorderProducts.length) {
-      dispatch(fetchPreorderProducts());
-    }
-  }, [dispatch, preorderProducts.length]);
+  const [showProductDetail, setShowProductDetail] = useState(
+    Boolean(selectedProduct)
+  );
 
   useEffect(() => {
     if (!location.state?.preserveSelection) {
@@ -61,13 +60,17 @@ export default function PreorderPage() {
     }
   }, [selectedProduct]);
 
-  function handleSelectProduct(productId) {
+  async function handleViewProductDetail(productId) {
+    navigate(`/products/${productId}`);
+  }
+
+  function handlePreOrderProduct(productId) {
     dispatch(fetchProductById(productId));
     setShowProductDetail(true);
   }
 
   function renderProductGrid() {
-    const preorderItems = preorderProducts;
+    console.log(preorderProducts);
 
     return (
       <div className="w-full max-w-4xl">
@@ -80,51 +83,82 @@ export default function PreorderPage() {
             Chọn mẫu kính bạn muốn giữ chỗ sớm
           </h2>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-            Các mẫu dưới đây là sản phẩm mới, chưa có sẵn trong kho và đang mở đặt
-            trước. Chọn một mẫu để xem chi tiết rồi điền thông tin nhận hàng.
+            Các mẫu dưới đây là sản phẩm mới, chưa có sẵn trong kho và đang mở
+            đặt trước. Chọn một mẫu để xem chi tiết rồi điền thông tin nhận
+            hàng.
           </p>
         </div>
-
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {preorderItems.map((product) => (
-            <div
-              key={product.id}
-              className="group overflow-hidden rounded-[28px] border border-white/80 bg-white/95 text-left shadow-[0_18px_40px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1.5 hover:border-teal-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
-            >
-              <div className="relative h-48 overflow-hidden bg-slate-100">
-                <ProductPreview
-                  product={product}
-                  className="transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/45 to-transparent" />
-                <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  {product.brand}
-                </span>
-                <span className="absolute right-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
-                  Đặt trước
-                </span>
-              </div>
+          {preorderProducts.map((product) => (
+            <div className="flex flex-col flex-1">
+              <Tooltip title="Xem thông tin sản phẩm">
+                {" "}
+                <div
+                  onClick={() => handleViewProductDetail(product.id)}
+                  className="group cursor-pointer overflow-hidden rounded-[28px] border border-white/80 bg-white/95 text-left shadow-[0_18px_40px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1.5 hover:border-teal-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
+                >
+                  <div className="relative h-48 overflow-hidden bg-slate-100">
+                    <ProductPreview
+                      product={product}
+                      className="transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/45 to-transparent" />
 
-              <button
-                type="button"
-                onClick={() => handleSelectProduct(product.id)}
-                className="flex min-h-[190px] w-full flex-col p-5 text-left"
+                    <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                      {product.brand}
+                    </span>
+
+                    <span className="absolute right-4 top-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+                      Đặt trước
+                    </span>
+                  </div>
+
+                  <div className="flex min-h-[190px] flex-col p-5">
+                    <h3 className="line-clamp-2 text-xl font-semibold text-slate-900">
+                      {product.name}
+                    </h3>
+
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500">
+                      {product.description || "Mẫu kính mới đang mở đặt trước."}
+                    </p>
+                  </div>
+                </div>
+              </Tooltip>
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePreOrderProduct(product.id);
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.backgroundColor = "#008080"; // darker teal
+                  e.currentTarget.style.color = "white"; // yellowish text
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "teal";
+                  e.currentTarget.style.color = "white";
+                }}
+                style={{
+                  width: "100%",
+                  padding: 20,
+                  borderBottom: "none",
+                  backgroundColor: "teal",
+                  color: "white",
+                  fontSize: "18px",
+                  fontFamily: "-apple-system",
+                  marginTop: 6,
+                }}
               >
-                <h3 className="line-clamp-2 text-xl font-semibold text-slate-900">
-                  {product.name}
-                </h3>
-                <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500">
-                  {product.description || "Mẫu kính mới đang mở đặt trước."}
-                </p>
-              </button>
+                Đặt trước ngay
+              </Button>
             </div>
           ))}
         </div>
 
-        {!loading && preorderItems.length === 0 ? (
+        {!loading && preorderProducts.length === 0 ? (
           <div className="mt-6 rounded-[28px] border border-dashed border-amber-300 bg-amber-50/80 p-6 text-sm leading-7 text-amber-900">
-            Hiện chưa có sản phẩm mở đặt trước. Vui lòng kiểm tra lại dữ liệu từ hệ
-            thống hoặc cập nhật danh sách sản phẩm đặt trước.
+            Hiện chưa có sản phẩm mở đặt trước. Vui lòng kiểm tra lại dữ liệu từ
+            hệ thống hoặc cập nhật danh sách sản phẩm đặt trước.
           </div>
         ) : null}
       </div>
@@ -172,14 +206,18 @@ export default function PreorderPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">
                 {selectedProduct.brand}
               </p>
-              <h2 className="mt-2 text-3xl font-bold">{selectedProduct.name}</h2>
+              <h2 className="mt-2 text-3xl font-bold">
+                {selectedProduct.name}
+              </h2>
             </div>
           </div>
 
           <div className="space-y-6 p-8">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700">
-                Giá dự kiến: {Number(selectedProduct.basePrice || 0).toLocaleString("vi-VN")}đ
+                Giá dự kiến:{" "}
+                {Number(selectedProduct.basePrice || 0).toLocaleString("vi-VN")}
+                đ
               </span>
               <span className="rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-sm font-semibold text-amber-700">
                 Sắp về hàng
@@ -233,9 +271,9 @@ export default function PreorderPage() {
                   Đặt trước tại EyeCare Store
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                  Điền thông tin nhận hàng, chọn màu sắc, kích thước và số lượng để giữ
-                  chỗ mẫu kính bạn thích. Khu vực này chỉ hiển thị các sản phẩm mới đang
-                  mở đặt trước.
+                  Điền thông tin nhận hàng, chọn màu sắc, kích thước và số lượng
+                  để giữ chỗ mẫu kính bạn thích. Khu vực này chỉ hiển thị các
+                  sản phẩm mới đang mở đặt trước.
                 </p>
               </div>
             </div>

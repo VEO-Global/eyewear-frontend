@@ -1,13 +1,21 @@
-import React from "react";
+import React, { useMemo } from "react";
 import CartItems from "../components/cart/CartItems";
 import Order from "../components/cart/Order";
 import { useSelector } from "react-redux";
 import { Button } from "antd";
 import { useNavigate } from "react-router-dom";
+import { CartSummary } from "../components/cart/CartSummary";
+import cartWithDetails from "../utils/cartWithDetail";
 
 export default function CartPage() {
   const { totalProduct } = useSelector((state) => state.cart);
   const navigate = useNavigate();
+  const { products } = useSelector((state) => state.products);
+  const { cart } = useSelector((state) => state.cart);
+
+  const cartDetails = useMemo(() => {
+    return cartWithDetails(cart, products);
+  }, [cart, products]);
 
   if (totalProduct === 0) {
     return (
@@ -28,12 +36,12 @@ export default function CartPage() {
       <div className="flex gap-8">
         {/* Left - Cart Items */}
         <div className="w-[65%]">
-          <CartItems />
+          <CartSummary cart={cartDetails} />
         </div>
 
         {/* Right - Order Summary */}
         <div className="w-[35%]">
-          <Order />
+          <Order cart={cartDetails} />
         </div>
       </div>
     </div>

@@ -5,18 +5,13 @@ import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { ArrowBigLeft, Heart, ShoppingCart } from "lucide-react";
 import { appToast } from "../utils/appToast";
 import { fetchProductById } from "../redux/products/producSlice";
-import { addItem } from "../redux/cart/cartSlice";
+import { addToCart } from "../redux/cart/cartSlice";
 import { toggleFavorite } from "../redux/favorites/favoriteSlice";
-import { ProductGallery } from "../components/productdetail/ProductGallery";
 import { ProductInfo } from "../components/productdetail/ProductInfor";
 import { VariantSelector } from "../components/productdetail/VariantSelector";
 import { Button } from "../components/common/Button";
 import Product3DViewer from "../components/common/Model3dViewer";
 import { getVariantStock, isPreorderProduct } from "../utils/productCatalog";
-import {
-  extractProductImages,
-  getPrimaryProductImage,
-} from "../utils/productImages";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -26,16 +21,14 @@ export default function ProductDetail() {
   const { selectedProduct, loading } = useSelector((state) => state.products);
   const user = useSelector((state) => state.auth.user);
   const favoriteItems = useSelector((state) => state.favorites.items);
+  const { lens } = useSelector((state) => state.lens);
+  const [selectedLens, setSelectedLens] = useState(null);
 
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
-  const [selectedImage, setSelectedImage] = useState("");
   const isPreorder = isPreorderProduct(selectedProduct);
   const isFavorite = favoriteItems.some(
     (item) => Number(item.id) === Number(selectedProduct?.id)
-  );
-  const productImages = extractProductImages(selectedProduct).map(
-    (image) => image.url
   );
 
   const currentVariant = selectedProduct?.variants?.find(
@@ -55,11 +48,7 @@ export default function ProductDetail() {
     }
   }, [selectedProduct]);
 
-  useEffect(() => {
-    setSelectedImage(getPrimaryProductImage(selectedProduct));
-  }, [selectedProduct]);
-
-  function handleAddToCart(product) {
+  async function handleAddToCart(product) {
     if (isPreorder) {
       handleNavigateToPreoder(product);
       return;
@@ -69,25 +58,14 @@ export default function ProductDetail() {
       appToast.warning("Sản phẩm này đang tạm hết hàng");
       return;
     }
-
-    dispatch(
-      addItem({
-        productID: product.id,
-        variantID: currentVariant.id,
-        variantPrice: currentVariant.price,
-        color: currentVariant.color || selectedColor,
-        size: currentVariant.size || selectedSize,
-        name: product.name,
-        brand: product.brand,
-        description: product.description,
-        material: product.material,
-        imgUrl: product.imageUrl || product.image || product.model3dUrl,
-        gender: product.gender,
-        quantity: getVariantStock(currentVariant),
+    const result = await dispatch(
+      addToCart({
+        productVariantId: currentVariant.id,
+        lensProductId: selectedLens,
+        quantity: 1,
       })
-    );
-
-    appToast.success(`Đã thêm sản phẩm ${product.name} vào giỏ hàng`);
+    ).unwrap();
+    console.log(result);
   }
 
   function handleNavigateToPreoder(product) {
@@ -95,10 +73,6 @@ export default function ProductDetail() {
     navigate("/user/preorder", {
       state: { preserveSelection: true },
     });
-  }
-
-  function handleSelectProductVariant(size) {
-    setSelectedSize(size);
   }
 
   async function handleToggleFavorite() {
@@ -111,7 +85,7 @@ export default function ProductDetail() {
       return;
     }
 
-    const result = await dispatch(toggleFavorite(selectedProduct));
+    const result = await dispatch(toggleFavorite(selectedProduct)).unwrap();
 
     if (toggleFavorite.fulfilled.match(result)) {
       appToast.success(
@@ -166,6 +140,8 @@ export default function ProductDetail() {
                 createdAt={selectedProduct.createdAt}
                 gender={selectedProduct.gender}
                 catalogType={selectedProduct.catalogType}
+                lens={lens}
+                setSelectedLens={setSelectedLens}
               />
 
               <VariantSelector
@@ -173,7 +149,7 @@ export default function ProductDetail() {
                 selectedColor={selectedColor}
                 selectedSize={selectedSize}
                 onColorChange={setSelectedColor}
-                onSizeChange={handleSelectProductVariant}
+                onSizeChange={setSelectedSize}
                 selectedProduct={selectedProduct}
                 selectedVariant={currentVariant}
               />

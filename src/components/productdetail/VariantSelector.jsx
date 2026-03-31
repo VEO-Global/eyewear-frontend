@@ -1,5 +1,4 @@
 import React from "react";
-import { isPreorderProduct } from "../../utils/productCatalog";
 
 const colorMap = {
   "Matte Black": "#1a1a1a",
@@ -9,6 +8,12 @@ const colorMap = {
   Brown: "#654321",
   Black: "#000000",
 };
+
+function isPreorderReady(product) {
+  if (product.catalogType === "NEW") {
+    return true;
+  }
+}
 
 export function VariantSelector({
   variants,
@@ -21,7 +26,7 @@ export function VariantSelector({
 }) {
   const colors = [...new Set(variants.map((v) => v.color))];
   const sizes = [...new Set(variants.map((v) => v.size))];
-  const isPreorder = isPreorderProduct(selectedProduct);
+  const isPreorder = isPreorderReady(selectedProduct);
 
   return (
     <div className="flex flex-col gap-8 py-8">

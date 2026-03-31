@@ -4,7 +4,8 @@ import api from "../../configs/config-axios";
 // ================= STATE =================
 const initialState = {
   orders: [],
-  loading: false,
+  myOrder: [],
+  loading: true,
   error: null,
   message: "",
 };
@@ -14,16 +15,26 @@ const initialState = {
 // 👉 Fetch orders
 export const fetchAllOrder = createAsyncThunk("order/fetchAllOrder", async (_, { rejectWithValue }) => {
   try {
-    const res = await api.get("/api/orders");
+    const res = await api.get("/orders");
     return res.data;
   } catch (error) {
     return rejectWithValue(error.response?.data || "Fetch orders failed");
   }
 });
 
+export const getMyOrder = createAsyncThunk("order/getMyOrder", async (_, { rejectWithValue }) => {
+  try {
+    const res = await api.get("/orders/my");
+    return res.data.content;
+  } catch (error) {
+    return rejectWithValue(error.response?.data || "Fetch orders failed");
+  }
+});
+
 // 👉 Create order (checkout)
+
 export const createOrder = createAsyncThunk("order/createOrder", async (payload, { rejectWithValue }) => {
-  console.log(payload);
+  console.log("Creating order with payload:", payload);
 
   try {
     const res = await api.post("/orders/checkout", payload);
@@ -56,7 +67,15 @@ const orderSlice = createSlice({
         state.error = true;
         state.message = action.payload;
       })
+      //===== GET ORDER =====
+      .addCase(getMyOrder.pending, (state) => {
+        state.loading = true;
+      })
 
+      .addCase(getMyOrder.fulfilled, (state, action) => {
+        state.myOrder = action.payload;
+        state.loading = false;
+      })
       // ===== CREATE =====
       .addCase(createOrder.pending, (state) => {
         state.loading = true;

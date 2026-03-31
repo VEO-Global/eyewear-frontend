@@ -6,22 +6,20 @@ export function Button({
   fullWidth = false,
   className = "cursor-pointer",
   children,
+  textColor = "text-white",
   ...props
 }) {
   const baseStyles =
-    "inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
-
+    "inline-flex items-center justify-center rounded-lg font-medium text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary:
-      "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-md focus:ring-teal-500",
+      "bg-teal-500 hover:bg-teal-700 hover:shadow-md focus:ring-teal-500",
     secondary:
-      "bg-amber-500 text-white hover:bg-amber-600 hover:shadow-md focus:ring-amber-500",
+      "bg-amber-500 hover:bg-amber-600 hover:shadow-md focus:ring-amber-500",
     outline:
-      "border-2 border-teal-600 text-teal-600 hover:bg-teal-50 focus:ring-teal-500",
-    ghost:
-      "text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-500",
-    danger:
-      " bg-red-500 text-white hover:bg-red-500 hover:shadow-md focus:ring-red-500",
+      "border-2 border-teal-600 bg-teal-600 hover:bg-teal-700 focus:ring-teal-500",
+    ghost: "bg-gray-500 hover:bg-gray-600 focus:ring-gray-500",
+    danger: "bg-red-500 hover:bg-red-600 hover:shadow-md focus:ring-red-500",
   };
 
   const sizes = {
@@ -34,7 +32,7 @@ export function Button({
 
   return (
     <button
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${width} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${width} ${className} cursor-pointer${textColor} }`}
       {...props}
     >
       {children}

@@ -1,13 +1,13 @@
 import React from "react";
 /* eslint-disable no-unused-vars */
-import { Key, Mail, User } from "lucide-react";
+import { Key, Mail } from "lucide-react";
 import { Button, Checkbox, Form, Input } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchProfile, loginUser } from "../../redux/auth/authSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import { toast } from "react-toastify";
-
+import { getMyCart } from "../../redux/cart/cartSlice";
 export default function LoginnForm() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -15,34 +15,40 @@ export default function LoginnForm() {
     useSelector((state) => state.auth);
 
   async function handleLogin(values) {
-    const result = await dispatch(loginUser(values));
-    if (loginUser.fulfilled.match(result)) {
+    try {
+      const res = await dispatch(loginUser(values)).unwrap();
+
       dispatch(fetchProfile());
-      toast.success("Đăng nhập thành công");
-    } else if (loginUser.rejected.match(result)) {
-      toast.error(result.payload || "Sai email hoặc mật khẩu");
+      dispatch(getMyCart());
+      toast.success("Đăng nhập thành công!");
+    } catch (error) {
+      toast.error(
+        "Đăng nhập thất bại! Vui lòng kiểm tra lại email hoặc mật khẩu"
+      );
     }
   }
   useEffect(() => {
-    if (isAuthenticated && user?.role) {
-      const timer = setTimeout(() => {
-        switch (user.role) {
-          case "ADMIN":
-            navigate("/admin/dashboard");
-            break;
+    if (!isAuthenticated || !user?.role) return;
 
-          case "CUSTOMER":
-            navigate("/");
-            break;
+    const timer = setTimeout(() => {
+      switch (user.role) {
+        case "ADMIN":
+          navigate("/admin/dashboard");
+          break;
+        case "CUSTOMER":
+          navigate("/");
+          break;
+        case "OPERATIONS":
+          navigate("/operation");
+          break;
+        default:
+          navigate("/");
+      }
+    }, 500); // giảm xuống 0.5s là đủ
 
-          default:
-            break;
-        }
-      }, 1000); // ⏳ delay 1s
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user?.role, navigate]);
 
-      return () => clearTimeout(timer); // cleanup
-    }
-  }, [isAuthenticated, navigate, user]);
   return (
     <div
       className="bg-white/80 backdrop-blur

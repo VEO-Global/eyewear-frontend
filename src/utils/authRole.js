@@ -18,6 +18,9 @@ export function getRoleDisplayLabel(role) {
   if (role === "CUSTOMER") {
     return "Khách hàng";
   }
+  if (role === "OPERATIONS") {
+    return "Nhân viên vận hành";
+  }
 
   return role || "Người dùng";
 }

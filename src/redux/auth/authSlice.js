@@ -1,9 +1,7 @@
 /* eslint-disable no-unused-vars */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../configs/config-axios";
-
-const PROFILE_ADDRESS_STORAGE_KEY = "profile-address-by-user";
-const FALLBACK_AUTH_ERROR_MESSAGE = "Đăng nhập thất bại. Vui lòng thử lại.";
+import { useSelector } from "react-redux";
 
 const initialState = {
   user: null,
@@ -65,37 +63,6 @@ function decodeJwtPayload(token) {
   }
 }
 
-function buildSessionUserFromToken(token) {
-  const payload = decodeJwtPayload(token);
-
-  if (!payload) {
-    return null;
-  }
-
-  const email = payload.sub ?? null;
-  const emailName = typeof email === "string" ? email.split("@")[0] : "";
-  const normalizedDisplayName = emailName
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-
-  return {
-    id:
-      payload.id ??
-      payload.userId ??
-      payload.user_id ??
-      payload.nameid ??
-      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ??
-      null,
-    email,
-    role: payload.role ?? null,
-    fullName: normalizedDisplayName || email || "Tài khoản",
-    phone: null,
-    isActive: null,
-  };
-}
-
 function normalizeIsActive(user) {
   if (!user || typeof user !== "object") {
     return null;
@@ -127,7 +94,6 @@ function normalizeUserProfile(user) {
 
   return {
     ...user,
-    id: user.id ?? user.userId ?? user.user_id ?? user.userID ?? null,
     fullName: user.fullName ?? user.full_name ?? user.name ?? "",
     email: user.email ?? user.username ?? "",
     phone: user.phone ?? user.phoneNumber ?? user.phone_number ?? "",
@@ -159,29 +125,6 @@ function extractTokenFromLoginResponse(data) {
   return null;
 }
 
-function readStoredProfileAddresses() {
-  try {
-    const storedValue = localStorage.getItem(PROFILE_ADDRESS_STORAGE_KEY);
-
-    if (!storedValue) {
-      return {};
-    }
-
-    const parsedValue = JSON.parse(storedValue);
-    return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredProfileAddresses(addressMap) {
-  try {
-    localStorage.setItem(PROFILE_ADDRESS_STORAGE_KEY, JSON.stringify(addressMap));
-  } catch {
-    // ignore storage failures
-  }
-}
-
 function persistStructuredAddress(userId, payload) {
   if (!userId || !payload || typeof payload !== "object") {
     return;
@@ -193,44 +136,6 @@ function persistStructuredAddress(userId, payload) {
   if (!hasStructuredAddress) {
     return;
   }
-
-  const currentAddressMap = readStoredProfileAddresses();
-  currentAddressMap[String(userId)] = {
-    provinceCode: payload.provinceCode,
-    provinceName: payload.provinceName,
-    districtCode: payload.districtCode,
-    districtName: payload.districtName,
-    wardCode: payload.wardCode,
-    wardName: payload.wardName,
-    addressDetail: payload.addressDetail,
-    isLatest: true,
-    updatedAt: new Date().toISOString(),
-  };
-  writeStoredProfileAddresses(currentAddressMap);
-}
-
-function mergeStoredAddress(profile) {
-  const normalizedProfile = normalizeUserProfile(profile);
-
-  if (!normalizedProfile?.id) {
-    return normalizedProfile;
-  }
-
-  const currentAddressMap = readStoredProfileAddresses();
-  const storedAddress = currentAddressMap[String(normalizedProfile.id)];
-
-  if (!storedAddress) {
-    return normalizedProfile;
-  }
-
-  return {
-    ...normalizedProfile,
-    addressDetail: normalizedProfile.addressDetail ?? storedAddress.addressDetail,
-    province: normalizedProfile.province ?? storedAddress.provinceName,
-    district: normalizedProfile.district ?? storedAddress.districtName,
-    ward: normalizedProfile.ward ?? storedAddress.wardName,
-    latestShippingAddress: normalizedProfile.latestShippingAddress || storedAddress,
-  };
 }
 
 async function persistProfileUpdate(id, payload) {
@@ -300,27 +205,12 @@ function mergeSubmittedAddress(profile, payload) {
 
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
-    const payload = {
-      email: values?.email ?? "",
-      password: values?.password ?? "",
-    };
-    const response = await api.post("/auth/login", payload);
-    const token = extractTokenFromLoginResponse(response.data);
-
-    if (!token) {
-      return rejectWithValue("Đăng nhập thất bại do frontend không đọc được token từ response.");
-    }
-
-    return {
-      token,
-      sessionUser: buildSessionUserFromToken(token),
-    };
+    const response = await api.post("/auth/login", values);
+    return response.data;
   } catch (error) {
     if (error.response?.status === 500) {
       return rejectWithValue("Sai email hoặc mật khẩu. Vui lòng thử lại.");
     }
-
-    return rejectWithValue(getErrorMessage(error, FALLBACK_AUTH_ERROR_MESSAGE));
   }
 });
 
@@ -329,74 +219,42 @@ export const registerUser = createAsyncThunk("/auth/register", async (values, { 
     const response = await api.post("auth/register", values);
     return response.data;
   } catch (error) {
-    return rejectWithValue(getErrorMessage(error, "Đăng ký thất bại. Vui lòng thử lại."));
+    if (error.status === 409) {
+      return rejectWithValue("Email đã tồn tại");
+    }
   }
 });
 
 export const fetchProfile = createAsyncThunk("/user/profile", async (_, { rejectWithValue }) => {
   try {
-    const response = await api.get("/user/profile");
-    return response.data;
-  } catch (error) {
-    if (error.response?.status === 403) {
-      return rejectWithValue({
-        status: 403,
-        message: "Không có quyền truy cập thông tin hồ sơ với vai trò hiện tại.",
-      });
-    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
+    const res = await api.get("/user/profile");
+
+    return res.data;
+  } catch (error) {
     return rejectWithValue(getErrorMessage(error, "Không thể lấy thông tin người dùng."));
   }
 });
 
-export const updateProfile = createAsyncThunk(
-  "auth/updateProfile",
-  async ({ id, data }, { rejectWithValue }) => {
-    try {
-      const payload = {
-        fullName: data.fullName,
-        full_name: data.fullName,
-        phone: data.phone,
-        phone_number: data.phone,
-        address: data.address,
-        addressDetail: data.addressDetail,
-        address_detail: data.addressDetail,
-        provinceCode: data.provinceCode,
-        provinceName: data.provinceName,
-        province_name: data.provinceName,
-        districtCode: data.districtCode,
-        districtName: data.districtName,
-        district_name: data.districtName,
-        wardCode: data.wardCode,
-        wardName: data.wardName,
-        ward_name: data.wardName,
-      };
+export const updateProfile = createAsyncThunk("/user/update_profiles", async (payload, { rejectWithValue }) => {
+  console.log(payload);
 
-      const updatedProfile = await persistProfileUpdate(id, payload);
-      persistStructuredAddress(id, payload);
-      return mergeSubmittedAddress(updatedProfile, payload);
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Cập nhật thông tin thất bại. Vui lòng thử lại."));
-    }
+  try {
+    const res = await api.put("/user/profile", payload);
+    return res.data;
+  } catch (error) {
+    return rejectWithValue(getErrorMessage(error, "Không thể lấy thông tin người dùng."));
   }
-);
+});
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    restoreSessionFromToken(state, action) {
-      const token = action.payload;
-      const sessionUser = buildSessionUserFromToken(token);
-
-      if (!token) {
-        return;
-      }
-
-      state.isAuthenticated = true;
-      state.user = state.user ? { ...sessionUser, ...state.user } : sessionUser;
-    },
     logout(state) {
+      const userId = state.user?.id;
+      localStorage.removeItem("token");
       state.user = null;
       state.isAuthenticated = false;
       state.notificationMessage = "";
@@ -412,9 +270,6 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
-        state.user = state.user
-          ? { ...action.payload.sessionUser, ...state.user }
-          : action.payload.sessionUser;
         state.error = null;
         state.notificationMessage = "Đăng nhập thành công";
         state.notificationType = "success";
@@ -446,15 +301,14 @@ const authSlice = createSlice({
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = mergeStoredAddress(action.payload);
+        state.user = action.payload;
         state.isAuthenticated = true;
+
+        // localStorage.setItem(`cart:${action.payload.id}`, JSON.stringify(cart));
       })
       .addCase(fetchProfile.rejected, (state, action) => {
         state.loading = false;
-        state.error =
-          action.payload && typeof action.payload === "object"
-            ? action.payload.message
-            : action.payload;
+        state.error = action.payload && typeof action.payload === "object" ? action.payload.message : action.payload;
 
         if (localStorage.getItem("token")) {
           state.isAuthenticated = true;

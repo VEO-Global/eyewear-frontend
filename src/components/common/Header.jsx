@@ -1,19 +1,20 @@
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   ShoppingCart,
-  Menu,
-  X,
   Glasses,
   User,
-  LayoutDashboard,
+  Bell,
+  X,
+  ArrowUpRight,
+  Menu,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
 import { logout } from "../../redux/auth/authSlice";
-import { Button, Tooltip } from "antd";
+import { fetchProducts } from "../../redux/products/producSlice";
 import DropDownMenu from "./DropDownMenu";
 import {
   markAllNotificationsAsRead,
@@ -22,11 +23,6 @@ import {
 import { appToast } from "../../utils/appToast";
 import { getRoleDisplayLabel, isStaffRole } from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
-import { ORDER_PHASE } from "../../utils/orderHistory";
-import {
-  readStaffIntakeOrders,
-  readStaffOrdersByPhase,
-} from "../../utils/staffOrders";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -157,7 +153,7 @@ export function Header() {
 
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { totalProduct } = useSelector((state) => state.cart);
-  const { items: notifications } = useSelector((state) => state.notifications);
+
   const { products } = useSelector((state) => state.products);
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,28 +161,24 @@ export function Header() {
 
   const [dropDownMenu, setDropDownMenu] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
+  const [openStaffMenu, setOpenStaffMenu] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [staffTaskCounts, setStaffTaskCounts] = useState(() => ({
-    "order-intake": readStaffIntakeOrders().length,
-    "prescription-support": readStaffOrdersByPhase(
-      ORDER_PHASE.PRESCRIPTION_REVIEW
-    ).length,
-    "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING).length,
-    "after-sales": 0,
-  }));
   const notificationRef = useRef(null);
   const searchRef = useRef(null);
+  const staffMenuRef = useRef(null);
 
-  const unreadCount = notifications.filter((item) => !item.read).length;
-  const recentNotifications = useMemo(
-    () => notifications.slice(0, 10),
-    [notifications]
-  );
   const isOrderTrackingPage = location.pathname === "/user/orders";
   const activeOrderTab =
     new URLSearchParams(location.search).get("tab") || "tat-ca";
   const staffOnly = isStaffRole(user?.role);
+  const staffTaskItems = [
+    "Tiếp nhận và xử lý đơn hàng",
+    "Kiểm tra các thông số prescription và liên hệ hỗ trợ khách hàng điều chỉnh",
+    "Xác nhận đơn, chuyển cho bộ phận Operations Staff để giao vận và gia công/làm kính",
+    "Xử lý đơn pre-order",
+    "Xử lý khiếu nại: đổi trả, bảo hành, hoàn tiền",
+  ];
 
   useEffect(() => {
     if (!products.length) {
@@ -200,15 +192,11 @@ export function Header() {
         id: `product-${product.id}`,
         type: "product",
         title: product.name,
-        description: `${product.brand || "EyeCare"}${
-          product.description ? ` • ${product.description}` : ""
-        }`,
+        description: `${product.brand || "EyeCare"}${product.description ? ` • ${product.description}` : ""}`,
         href: `/products/${product.id}`,
         requiresAuth: false,
         rawSearch:
-          `${product.name} ${product.brand || ""} ${product.description || ""} ${
-            product.id
-          }`.trim(),
+          `${product.name} ${product.brand || ""} ${product.description || ""} ${product.id}`.trim(),
       })),
     [products]
   );
@@ -232,7 +220,7 @@ export function Header() {
         normalizeSearchValue(item.rawSearch).includes(normalizedKeyword)
       )
       .slice(0, 8);
-  }, [productSearchItems, searchKeyword]);
+  }, [featureSearchItems, productSearchItems, searchKeyword]);
 
   function toogleDropDownMeni(curr) {
     setDropDownMenu(!curr);
@@ -287,6 +275,7 @@ export function Header() {
 
   function handleStaffTaskNavigate(href) {
     navigate(href);
+    setOpenStaffMenu(false);
   }
 
   function handleSearchSubmit(event) {
@@ -321,46 +310,18 @@ export function Header() {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setIsSearchFocused(false);
       }
+
+      if (
+        staffMenuRef.current &&
+        !staffMenuRef.current.contains(event.target)
+      ) {
+        setOpenStaffMenu(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (!staffOnly) {
-      return undefined;
-    }
-
-    function syncStaffTaskCounts() {
-      setStaffTaskCounts({
-        "order-intake": readStaffIntakeOrders().length,
-        "prescription-support": readStaffOrdersByPhase(
-          ORDER_PHASE.PRESCRIPTION_REVIEW
-        ).length,
-        "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING)
-          .length,
-        "after-sales": 0,
-      });
-    }
-
-    syncStaffTaskCounts();
-
-    const intervalId = window.setInterval(syncStaffTaskCounts, 1500);
-
-    function handleStorage(event) {
-      if (!event.key || event.key.startsWith("order-history:")) {
-        syncStaffTaskCounts();
-      }
-    }
-
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [staffOnly]);
 
   function formatNotificationTime(createdAt) {
     const date = new Date(createdAt);
@@ -393,64 +354,68 @@ export function Header() {
             </Link>
           </div>
 
-          <div className="mx-8 hidden max-w-lg flex-1 lg:flex">
-            <div className="group relative w-full" ref={searchRef}>
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(event) => setSearchKeyword(event.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                onKeyDown={handleSearchSubmit}
-                placeholder="Tìm sản phẩm, chức năng, đơn hàng..."
-                className="w-full rounded-full border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 outline-none transition-all duration-200 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-200"
-              />
-              <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-teal-500" />
+          {user?.role === "CUSTOMER" && (
+            <div className="mx-8 hidden max-w-lg flex-1 lg:flex">
+              <div className="group relative w-full" ref={searchRef}>
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(event) => setSearchKeyword(event.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onKeyDown={handleSearchSubmit}
+                  placeholder="Tìm sản phẩm, chức năng, đơn hàng..."
+                  className="w-full rounded-full border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 outline-none transition-all duration-200 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-200"
+                />
+                <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-teal-500" />
 
-              {isSearchFocused && (
-                <div className="absolute left-0 right-0 top-full z-[260] mt-3 overflow-hidden rounded-3xl border border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-xl">
-                  <div className="border-b border-slate-100 px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Tìm kiếm toàn cục
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Gõ tên sản phẩm hoặc chức năng như “theo dõi đơn hàng”,
-                      “giỏ hàng”, “đặt trước”.
-                    </p>
+                {isSearchFocused && (
+                  <div className="absolute left-0 right-0 top-full z-[260] mt-3 overflow-hidden rounded-3xl border border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                    <div className="border-b border-slate-100 px-5 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Tìm kiếm toàn cục
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Gõ tên sản phẩm hoặc chức năng như “theo dõi đơn hàng”,
+                        “giỏ hàng”, “đặt trước”.
+                      </p>
+                    </div>
+
+                    {searchResults.length > 0 ? (
+                      <div className="max-h-[420px] overflow-y-auto p-2">
+                        {searchResults.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleSearchSelect(item)}
+                            className="flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-900">
+                                {item.title}
+                              </p>
+                              <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+                                {item.description}
+                              </p>
+                            </div>
+
+                            <div className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                              {item.type === "product"
+                                ? "Sản phẩm"
+                                : "Chức năng"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-5 py-8 text-sm text-slate-500">
+                        Không tìm thấy kết quả phù hợp.
+                      </div>
+                    )}
                   </div>
-
-                  {searchResults.length > 0 ? (
-                    <div className="max-h-[420px] overflow-y-auto p-2">
-                      {searchResults.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleSearchSelect(item)}
-                          className="flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-900">
-                              {item.title}
-                            </p>
-                            <p className="mt-1 line-clamp-2 text-sm text-slate-500">
-                              {item.description}
-                            </p>
-                          </div>
-
-                          <div className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                            {item.type === "product" ? "Sản phẩm" : "Chức năng"}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-5 py-8 text-sm text-slate-500">
-                      Không tìm thấy kết quả phù hợp.
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="hidden items-center gap-4 lg:flex">
             <div className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-gray-600 transition-colors hover:bg-gray-50 hover:text-teal-600">
@@ -463,10 +428,10 @@ export function Header() {
                     onClick={() => toogleDropDownMeni(dropDownMenu)}
                   >
                     <span className="text-sm font-medium">
-                      Xin chào, {user.fullName}
+                      Xin chào, {user?.fullName}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {getRoleDisplayLabel(user.role)}
+                      {getRoleDisplayLabel(user?.role)}
                     </span>
                     <DropDownMenu
                       openMenu={dropDownMenu}
@@ -482,52 +447,111 @@ export function Header() {
               )}
             </div>
 
-            {user?.role === "CUSTOMER" && (
+            {staffOnly ? (
+              <div className="relative" ref={staffMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setOpenStaffMenu((prev) => !prev)}
+                  className="rounded-full p-2 text-gray-600 transition-colors hover:bg-white hover:text-teal-600"
+                >
+                  <Menu className="h-6 w-6" />
+                </button>
+
+                {openStaffMenu && (
+                  <div className="absolute right-0 top-full z-[300] mt-4 w-[400px] max-h-[calc(100vh-110px)] overflow-hidden rounded-3xl border border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl">
+                    <div className="border-b border-slate-100 bg-gradient-to-r from-teal-50 via-white to-sky-50 px-5 py-3">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Bảng chức năng nhân viên
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Các nhóm nghiệp vụ chính cho Sales Staff trong ca làm
+                        việc.
+                      </p>
+                    </div>
+
+                    <div className="staff-menu-scroll max-h-[calc(100vh-190px)] overflow-y-auto bg-slate-50/80 px-4 py-3 pr-2">
+                      <div className="flex flex-col gap-3 pb-6">
+                        {sharedStaffTaskItems.map((task, index) => (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => handleStaffTaskNavigate(task.href)}
+                            className="block w-full rounded-[22px] border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold leading-5 text-slate-800">
+                                  {index + 1}. {task.title}
+                                </p>
+                                <p className="mt-1 text-sm leading-6 text-slate-500">
+                                  {task.description}
+                                </p>
+                              </div>
+                              <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
               <Tooltip
                 title="Xem tất cả sản phẩm trong giỏ hàng"
-                onClick={() => navigate("/user/cart")}
+                onClick={handleCartClick}
               >
-                <div className="relative p-2 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors">
+                <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
                   <ShoppingCart className="h-6 w-6" />
 
-                  {totalProduct > 0 && (
-                    <span className="absolute top-0 right-0 h-5 w-5 bg-amber-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
+                  {isAuthenticated && totalProduct > 0 && (
+                    <span className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-500 text-xs font-bold text-white">
                       {totalProduct}
                     </span>
                   )}
                 </div>
               </Tooltip>
             )}
-
-            {user?.role === "ADMIN" && (
-              <Button
-                icon={<LayoutDashboard />}
-                onClick={() => navigate("/admin/dashboard")}
-              >
-                Tổng quan
-              </Button>
-            )}
           </div>
         </div>
 
-        {/* Desktop Navigation */}
-        {user?.role != "ADMIN" && (
-          <nav className="hidden lg:flex items-center justify-between gap-8 py-3">
+        {isOrderTrackingPage && (
+          <div className="pb-3 pt-2">
+            <div className="overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-[0_14px_30px_rgba(14,116,144,0.10)]">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7">
+                {orderTabs.map((tab) => {
+                  const isActive = activeOrderTab === tab.value;
+
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => handleOrderTabClick(tab.value)}
+                      className={`whitespace-nowrap border-b-2 px-3 py-4 text-center text-sm font-medium transition sm:px-4 sm:text-base ${
+                        isActive
+                          ? "border-teal-500 bg-gradient-to-b from-cyan-50 to-white text-teal-600"
+                          : "border-transparent text-slate-600 hover:bg-sky-50 hover:text-sky-600"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isOrderTrackingPage && user?.role === "CUSTOMER" && !staffOnly && (
+          <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
             {navItems.map((item) => (
               <button
                 key={item.label}
-                onClick={() => {
-                  if (!isAuthenticated) {
-                    toast.warning("Vui lòng đăng nhập để tiếp tục!");
-                    navigate("/auth/login");
-                  } else {
-                    navigate(item.href);
-                  }
-                }}
-                className="text-3xl font-sans font-medium text-gray-700 hover:text-teal-600 transition-colors relative group cursor-pointer"
+                onClick={() => handleNavigateItem(item)}
+                className="group relative cursor-pointer font-sans text-3xl font-medium text-gray-700 transition-colors hover:text-teal-600"
               >
                 {item.label}
-                <span className="absolute inset-x-0 -bottom-3 h-0.5 bg-teal-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left" />
+                <span className="absolute inset-x-0 -bottom-3 h-0.5 origin-left scale-x-0 bg-teal-600 transition-transform duration-200 group-hover:scale-x-100" />
               </button>
             ))}
           </nav>

@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Form } from "antd";
 import { useSelector } from "react-redux";
+import cartWithDetails from "../../utils/cartWithDetail";
 
 const SHIPPING_COST = 30000;
 
@@ -12,29 +13,36 @@ function formatCurrency(amount) {
   }).format(amount || 0);
 }
 
-export default function CheckOutOrderSummary({ form, lensProducts }) {
-  const { cart, selectedVariantIds } = useSelector((state) => state.cart);
+export default function CheckOutOrderSummary({ form }) {
+  const { cart } = useSelector((state) => state.cart);
+  const { products } = useSelector((state) => state.products);
+  const { lens } = useSelector((state) => state.lens);
+
   const prescriptionOption =
     Form.useWatch("prescriptionOption", form) || "without_prescription";
   const selectedLensId = Form.useWatch("lensProductId", form);
 
-  const selectedCartItems = useMemo(
-    () => cart.filter((item) => selectedVariantIds.includes(item.variantID)),
-    [cart, selectedVariantIds]
+  const cartDetail = useMemo(
+    () => cartWithDetails(cart, products),
+    [cart, products]
   );
 
   const selectedLensProduct = useMemo(
-    () => lensProducts.find((item) => Number(item.id) === Number(selectedLensId)) || null,
-    [lensProducts, selectedLensId]
+    () =>
+      lens.find((item) => Number(item.id) === Number(selectedLensId)) || null,
+    [lens, selectedLensId]
   );
 
   const lensPrice =
-    prescriptionOption === "with_prescription" ? Number(selectedLensProduct?.price || 0) : 0;
-  const selectedTotalPrice = selectedCartItems.reduce(
-    (total, item) => total + item.variantPrice * item.quantity,
-    0
-  );
-  const subtotal = selectedTotalPrice + lensPrice;
+    prescriptionOption === "with_prescription"
+      ? Number(selectedLensProduct?.price || 0)
+      : 0;
+
+  const subtotal =
+    cartDetail.reduce(
+      (total, item) => total + item.variantPrice * item.quantity,
+      0
+    ) + lensPrice;
   const totalAmount = subtotal + SHIPPING_COST;
 
   return (
@@ -42,13 +50,13 @@ export default function CheckOutOrderSummary({ form, lensProducts }) {
       <h2 className="mb-6 text-xl font-semibold">Tóm tắt đơn hàng</h2>
 
       <div className="mb-6 space-y-4">
-        {selectedCartItems.map((item) => (
+        {cartDetail.map((item) => (
           <div
             key={item.variantID}
             className="flex items-start justify-between gap-4 text-sm"
           >
             <div>
-              <p className="font-medium">{`${item.name} (${
+              <p className="font-medium">{`${item.productName} (${
                 item.gender === "Male" ? "Nam" : "Nữ"
               })`}</p>
               <p className="text-gray-500">Số lượng: {item.quantity}</p>
@@ -84,7 +92,14 @@ export default function CheckOutOrderSummary({ form, lensProducts }) {
       <div className="space-y-3 text-sm">
         <div className="flex justify-between">
           <span>Tạm tính</span>
-          <span>{formatCurrency(selectedTotalPrice)}</span>
+          <span>
+            {formatCurrency(
+              cartDetail.reduce(
+                (total, item) => total + item.variantPrice * item.quantity,
+                0
+              )
+            )}
+          </span>
         </div>
 
         {prescriptionOption === "with_prescription" && selectedLensProduct ? (

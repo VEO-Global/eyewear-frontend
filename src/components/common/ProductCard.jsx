@@ -28,15 +28,12 @@ export function ProductCard({ product }) {
   }
 
   function handlePrimaryAction() {
-    dispatch(fetchProductById(product.id));
-
     if (isPreorder) {
       navigate("/user/preorder", {
         state: { preserveSelection: true },
       });
       return;
     }
-
     navigate(`/products/${product.id}`);
   }
 
@@ -59,6 +56,7 @@ export function ProductCard({ product }) {
 
     appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
   }
+
   return (
     <div
       className="

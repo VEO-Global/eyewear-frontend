@@ -12,17 +12,9 @@ import ProductDetail from "../pages/ProductDetail";
 import { Scroll } from "lucide-react";
 import ScrollToTop from "../components/common/ScrollToTop";
 import CartPage from "../pages/CartPage";
-import PaymentPage from "../pages/PaymentPage";
 import UserProfilePage from "../pages/UserProfilePage";
 import PreOrderPage from "../pages/PreOrderPage";
 import AdminDashBoard from "../pages/AdminDashBoard";
-import ManagerDashboard from "../pages/Manager/ManagerDashboardRevenue";
-import ManagerLayout from "../components/layout/MangerLayOut";
-import ManagerDashboardRevenue from "../pages/Manager/ManagerDashboardRevenue";
-import ManagerProductPage from "../pages/Manager/ManagerProductPage";
-import ManagerPromotionPage from "../pages/Manager/ManagerPromotionsPage";
-import PolicyTable from "../pages/Manager/ManagerPolicesPage";
-import UsersTable from "../components/adminDashBorad/UsersTable";
 import CustomGlassesPage from "../pages/CustomGlassesPage";
 import VisionTestPage from "../pages/VisionTestPage";
 import OrderTrackingPage from "../pages/OrderTrackingPage";
@@ -30,6 +22,13 @@ import StaffOrderIntakePage from "../pages/staff/StaffOrderIntakePage";
 import StaffPrescriptionSupportPage from "../pages/staff/StaffPrescriptionSupportPage";
 import StaffOperationsHandoffPage from "../pages/staff/StaffOperationsHandoffPage";
 import StaffAfterSalesPage from "../pages/staff/StaffAfterSalesPage";
+import OperationStaffDashboard from "../pages/operation-staff/OperationStaffDashboard";
+import Operationlayout from "../components/layout/Operationlayout";
+import OperationOrderPage from "../pages/operation-staff/OperationOrderPage";
+import OperationPreOrderPage from "../pages/operation-staff/OperationPreOrderPage";
+import OperationPrescriptionOrdersPage from "../pages/operation-staff/OperationPrescriptionOrdersPage";
+import OrderCreatePage from "../pages/OrderCratePage";
+import PaymentPage from "../pages/PaymentPage";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -83,13 +82,14 @@ function AnimatedRoutes() {
             />
 
             {/* User Route */}
-            <Route
-              path="/user/profile/:id"
-              element={<UserProfilePage />}
-            ></Route>
+            <Route path="/user/profile" element={<UserProfilePage />}></Route>
             <Route path="/user/orders" element={<OrderTrackingPage />}></Route>
             <Route path="/user/cart" element={<CartPage />}></Route>
-            <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
+            <Route
+              path="/user/cart/create-order"
+              element={<OrderCreatePage />}
+            ></Route>
+            <Route path="/user/payment" element={<PaymentPage />} />
             <Route path="/user/preorder" element={<PreOrderPage />} />
             <Route path="/custom-glasses" element={<CustomGlassesPage />} />
             <Route path="/vision-test" element={<VisionTestPage />} />
@@ -113,18 +113,20 @@ function AnimatedRoutes() {
             {/* Admin Route */}
             <Route path="/admin/dashboard" element={<AdminDashBoard />}></Route>
 
-            {/* Manager Route */}
-            <Route path="/manager" element={<ManagerLayout />}>
-              {/* default */}
-              <Route index element={<ManagerDashboardRevenue />} />
-
-              {/* các page */}
-              <Route path="revenue" element={<ManagerDashboardRevenue />} />
-              <Route path="products" element={<ManagerProductPage />} />
-              {/* <Route path="pricing" element={<ManagerPromotionPage />} /> */}
-              <Route path="promotions" element={<ManagerPromotionPage />} />
-              <Route path="policies" element={<PolicyTable />} />
-              <Route path="users" element={<UsersTable />} />
+            {/* Operation */}
+            <Route path="/operation" element={<Operationlayout />}>
+              <Route index element={<OperationStaffDashboard />} />
+              <Route path="orders" element={<OperationOrderPage />} />
+              <Route
+                path="pre-orders"
+                element={<OperationPreOrderPage></OperationPreOrderPage>}
+              ></Route>
+              <Route
+                path="prescription-orders"
+                element={
+                  <OperationPrescriptionOrdersPage></OperationPrescriptionOrdersPage>
+                }
+              ></Route>
             </Route>
           </Route>
         </Routes>

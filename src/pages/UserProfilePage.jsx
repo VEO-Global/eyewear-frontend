@@ -15,31 +15,11 @@ import { appToast } from "../utils/appToast";
 import { fetchProfile, updateProfile } from "../redux/auth/authSlice";
 import { fetchProductById } from "../redux/products/producSlice";
 import { toggleFavorite } from "../redux/favorites/favoriteSlice";
-import {
-  extractLatestCheckoutAddress,
-  formatCheckoutAddress,
-} from "../utils/userAddress";
+
 import { isPreorderProduct } from "../utils/productCatalog";
 import { getPrimaryProductImage } from "../utils/productImages";
 import { getRoleDisplayLabel, isStaffRole } from "../utils/authRole";
-
-const emptyShippingAddress = {
-  provinceCode: undefined,
-  provinceName: "",
-  districtCode: undefined,
-  districtName: "",
-  wardCode: undefined,
-  wardName: "",
-  addressDetail: "",
-};
-
-function getUserPhone(user) {
-  return user?.phone ?? user?.phoneNumber ?? user?.phone_number ?? "";
-}
-
-function getUserId(user) {
-  return user?.id ?? user?.userId ?? user?.user_id ?? user?.userID ?? null;
-}
+import UpdateProfileForm from "../form/user/UpdateProfileForm";
 
 function getAccountStatusLabel(user) {
   if (user?.isActive === true) {
@@ -51,41 +31,6 @@ function getAccountStatusLabel(user) {
   }
 
   return "Chưa đồng bộ trạng thái tài khoản";
-}
-
-function buildProfileFormState(user) {
-  const latestAddress = extractLatestCheckoutAddress(user);
-  const fallbackAddress = latestAddress
-    ? {
-        ...emptyShippingAddress,
-        ...latestAddress,
-        addressDetail: latestAddress.addressDetail?.trim() || "",
-      }
-    : { ...emptyShippingAddress };
-
-  const directAddress =
-    typeof user?.address === "string" ? user.address.trim() : "";
-
-  return {
-    fullName: user?.fullName || "",
-    phone: getUserPhone(user),
-    shippingAddress: {
-      ...fallbackAddress,
-      addressDetail: fallbackAddress.addressDetail || directAddress,
-    },
-  };
-}
-
-function isValidShippingAddress(address) {
-  return Boolean(
-    typeof address?.provinceCode === "number" &&
-    address?.provinceName &&
-    typeof address?.districtCode === "number" &&
-    address?.districtName &&
-    typeof address?.wardCode === "number" &&
-    address?.wardName &&
-    address?.addressDetail?.trim()
-  );
 }
 
 function SummaryCard({ label, value, compact = false }) {
@@ -109,11 +54,6 @@ export default function UserProfilePage() {
   const { user, loading } = useSelector((state) => state.auth);
   const favoriteItems = useSelector((state) => state.favorites.items);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: "",
-    phone: "",
-    shippingAddress: { ...emptyShippingAddress },
-  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -121,36 +61,6 @@ export default function UserProfilePage() {
       dispatch(fetchProfile());
     }
   }, [dispatch]);
-
-  useEffect(() => {
-    setFormData(buildProfileFormState(user));
-  }, [user]);
-
-  const fullAddress = useMemo(
-    () => formatCheckoutAddress(formData.shippingAddress),
-    [formData.shippingAddress]
-  );
-  const isStaffUser = isStaffRole(user?.role);
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function handleAddressChange(nextAddress) {
-    setFormData((prev) => ({
-      ...prev,
-      shippingAddress: {
-        ...emptyShippingAddress,
-        ...(nextAddress || {}),
-      },
-    }));
-  }
-
-  function handleCancel() {
-    setFormData(buildProfileFormState(user));
-    setIsEditing(false);
-  }
 
   function handleOpenFavoriteProduct(product) {
     dispatch(fetchProductById(product.id));
@@ -176,55 +86,7 @@ export default function UserProfilePage() {
     appToast.error(result.payload || "Không thể cập nhật danh sách yêu thích.");
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const profileUserId = getUserId(user);
-
-    if (!profileUserId) {
-      appToast.error("Không tìm thấy mã người dùng để cập nhật hồ sơ.");
-      return;
-    }
-
-    if (!isValidShippingAddress(formData.shippingAddress)) {
-      appToast.warning(
-        "Vui lòng chọn đầy đủ tỉnh/thành, quận/huyện, phường/xã và địa chỉ chi tiết."
-      );
-      return;
-    }
-
-    const addressDetail = formData.shippingAddress.addressDetail.trim();
-
-    const result = await dispatch(
-      updateProfile({
-        id: profileUserId,
-        data: {
-          fullName: formData.fullName.trim(),
-          phone: formData.phone.trim(),
-          address: addressDetail,
-          addressDetail,
-          provinceCode: formData.shippingAddress.provinceCode,
-          provinceName: formData.shippingAddress.provinceName.trim(),
-          districtCode: formData.shippingAddress.districtCode,
-          districtName: formData.shippingAddress.districtName.trim(),
-          wardCode: formData.shippingAddress.wardCode,
-          wardName: formData.shippingAddress.wardName.trim(),
-        },
-      })
-    );
-
-    if (updateProfile.fulfilled.match(result)) {
-      appToast.success("Cập nhật thông tin cá nhân thành công.");
-      setIsEditing(false);
-      return;
-    }
-
-    appToast.error(
-      result.payload || "Cập nhật thông tin thất bại. Vui lòng thử lại."
-    );
-  }
-
-  return (
+  return loading === false ? (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(153,246,228,0.35),_transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] px-4 py-10">
       <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/70 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur">
         <div className="h-44 bg-[linear-gradient(135deg,#99f6e4_0%,#dbeafe_48%,#93c5fd_100%)]" />
@@ -269,8 +131,8 @@ export default function UserProfilePage() {
 
           <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
             <SummaryCard
-              label={isStaffUser ? "Mã nhân viên" : "Mã khách hàng"}
-              value={getUserId(user) || "--"}
+              label={isStaffRole ? "Mã nhân viên" : "Mã khách hàng"}
+              value={user?.id || "--"}
             />
             <SummaryCard
               label="Họ và tên"
@@ -278,7 +140,7 @@ export default function UserProfilePage() {
             />
             <SummaryCard
               label="Số điện thoại"
-              value={getUserPhone(user) || "Chưa cập nhật"}
+              value={user?.phone || "Chưa cập nhật"}
             />
             <SummaryCard
               label="Vai trò"
@@ -295,7 +157,7 @@ export default function UserProfilePage() {
             <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                  Thông tin cá nhân
+                  Cập nhập thông tin cá nhân
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
                   Cập nhật họ tên, số điện thoại và địa chỉ để hệ thống hỗ trợ
@@ -314,93 +176,13 @@ export default function UserProfilePage() {
                 </button>
               )}
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
-                  <label
-                    htmlFor="fullName"
-                    className="mb-3 block text-sm font-semibold text-slate-700"
-                  >
-                    Họ và tên
-                  </label>
-                  <input
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
-                    disabled={!isEditing}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
-                  />
-                </div>
-
-                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
-                  <label
-                    htmlFor="phone"
-                    className="mb-3 block text-sm font-semibold text-slate-700"
-                  >
-                    Số điện thoại
-                  </label>
-                  <div className="relative">
-                    <Phone
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      id="phone"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      disabled={!isEditing}
-                      className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-slate-900 outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-slate-700">
-                    Địa chỉ
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    {fullAddress
-                      ? `Địa chỉ đầy đủ: ${fullAddress}`
-                      : "Chưa có địa chỉ đầy đủ."}
-                  </p>
-                </div>
-
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] sm:p-5">
-                  <AddressSelector
-                    value={formData.shippingAddress}
-                    onChange={handleAddressChange}
-                    disabled={!isEditing}
-                  />
-                </div>
-              </div>
-
-              {isEditing && (
-                <div className="flex flex-wrap justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? "Đang lưu..." : "Lưu thay đổi"}
-                  </button>
-                </div>
-              )}
-            </form>
+            <UpdateProfileForm
+              isEditing={isEditing}
+              setIsEditing={setIsEditing}
+            ></UpdateProfileForm>
           </div>
 
-          {!isStaffUser && (
+          {user?.role === "CUSTOMER" && (
             <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -503,6 +285,26 @@ export default function UserProfilePage() {
               )}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(153,246,228,0.25),_transparent_40%),linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)]">
+      <div className="flex flex-col items-center gap-6 rounded-3xl border border-white/60 bg-white/80 px-10 py-8 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+        {/* Spinner */}
+        <div className="relative">
+          <div className="h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-cyan-500" />
+          <div className="absolute inset-0 animate-ping rounded-full border border-cyan-400 opacity-20" />
+        </div>
+
+        {/* Text */}
+        <div className="text-center">
+          <p className="text-lg font-semibold text-slate-700">
+            Đang tải thông tin người dùng
+          </p>
+          <p className="text-sm text-slate-400 mt-1">
+            Vui lòng chờ trong giây lát...
+          </p>
         </div>
       </div>
     </div>

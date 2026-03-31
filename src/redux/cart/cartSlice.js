@@ -1,5 +1,7 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { fetchProfile, logout } from "../auth/authSlice";
+import api from "../../configs/config-axios";
+import { toast } from "react-toastify";
 
 function getCartStorageKey(userId) {
   return `cart:${userId}`;
@@ -25,28 +27,67 @@ function getStoredCart(userId) {
 }
 
 const initialState = {
+  userId: null,
   cart: [],
+  selectedProductForPrescription: null,
   selectedVariantIds: [],
   totalProduct: 0,
   totalPrice: 0,
 };
 
+function saveCart(userId, cart) {
+  try {
+    localStorage.setItem(`cart:${userId}`, JSON.stringify(cart));
+  } catch (error) {
+    // Handle storage errors if needed
+    toast.error("Failed to save cart to localStorage", error);
+  }
+}
 function calculateCart(state) {
   state.totalProduct = state.cart.reduce((total, item) => total + item.quantity, 0);
-  state.totalPrice = state.cart.reduce(
-    (total, item) => total + item.variantPrice * item.quantity,
-    0
-  );
+  state.totalPrice = state.cart.reduce((total, item) => total + item.variantPrice * item.quantity, 0);
 }
 
 function isSelectableCartItem(item) {
   return !item?.isPreorder || item?.isPreorderReady;
 }
 
+export const getMyCart = createAsyncThunk("cart/getMyCart", async (_, { rejectWithValue }) => {
+  try {
+    const res = await api.get("/cart");
+    return res.data.items;
+  } catch (error) {
+    return rejectWithValue(error);
+  }
+});
+
+export const addToCart = createAsyncThunk("cart/addToCart", async (values, { rejectWithValue }) => {
+  try {
+    const res = await api.post("/cart/items", values);
+
+    return res.data;
+  } catch (error) {
+    return rejectWithValue(error);
+  }
+});
+
+export const removeCartItem = createAsyncThunk("cart/removeCartItem", async (variantId, { rejectWithValue }) => {
+  try {
+    const res = await api.delete(`/cart/items/${variantId}`);
+    return res.data;
+  } catch (error) {
+    return rejectWithValue(error);
+  }
+});
+
 const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
+    setSelectedProductForPrescription(state, action) {
+      state.selectedProductForPrescription = state.cart.find((item) => item.variantID === action.payload) || null;
+    },
+
     addItem(state, action) {
       const product = action.payload;
       const exist = state.cart.find((item) => item.variantID === product.variantID);
@@ -58,27 +99,12 @@ const cartSlice = createSlice({
         state.cart.push({ ...product, quantity: quantityToAdd });
       }
 
-      if (
-        isSelectableCartItem(product) &&
-        !state.selectedVariantIds.includes(product.variantID)
-      ) {
+      if (isSelectableCartItem(product) && !state.selectedVariantIds.includes(product.variantID)) {
         state.selectedVariantIds.push(product.variantID);
       }
 
       calculateCart(state);
-    },
-
-    removeItem(state, action) {
-      const productID = action.payload;
-
-      const item = state.cart.find((i) => i.productID === productID);
-
-      if (item) {
-        state.totalProduct -= item.quantity;
-        state.totalPrice -= item.variantPrice * item.quantity;
-      }
-
-      state.cart = state.cart.filter((item) => item.productID !== productID);
+      saveCart(state.userId, state.cart);
     },
 
     updateQuantity(state, action) {
@@ -98,11 +124,7 @@ const cartSlice = createSlice({
 
       if (state.selectedVariantIds.includes(variantId)) {
         state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
-      } else if (
-        state.cart.some(
-          (item) => item.variantID === variantId && isSelectableCartItem(item)
-        )
-      ) {
+      } else if (state.cart.some((item) => item.variantID === variantId && isSelectableCartItem(item))) {
         state.selectedVariantIds.push(variantId);
       }
     },
@@ -112,10 +134,7 @@ const cartSlice = createSlice({
         .filter((item) => isSelectableCartItem(item))
         .map((item) => item.variantID);
 
-      if (
-        selectableVariantIds.length > 0 &&
-        state.selectedVariantIds.length === selectableVariantIds.length
-      ) {
+      if (selectableVariantIds.length > 0 && state.selectedVariantIds.length === selectableVariantIds.length) {
         state.selectedVariantIds = [];
       } else {
         state.selectedVariantIds = selectableVariantIds;
@@ -139,9 +158,7 @@ const cartSlice = createSlice({
       const variantIds = Array.isArray(action.payload) ? action.payload : [];
 
       state.cart = state.cart.filter((item) => !variantIds.includes(item.variantID));
-      state.selectedVariantIds = state.selectedVariantIds.filter(
-        (id) => !variantIds.includes(id)
-      );
+      state.selectedVariantIds = state.selectedVariantIds.filter((id) => !variantIds.includes(id));
       calculateCart(state);
     },
 
@@ -155,8 +172,9 @@ const cartSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.userId = action.payload.id;
         if (!state.cart.length) {
-          state.cart = getStoredCart(action.payload?.id);
+          state.cart = getStoredCart(state.userId);
           state.selectedVariantIds = state.cart
             .filter((item) => isSelectableCartItem(item))
             .map((item) => item.variantID);
@@ -164,6 +182,24 @@ const cartSlice = createSlice({
 
         calculateCart(state);
       })
+
+      .addCase(getMyCart.fulfilled, (state, action) => {
+        state.cart = action.payload;
+        calculateCart(state);
+      })
+
+      .addCase(addToCart.fulfilled, (state, action) => {
+        const newItem = action.payload;
+        const exist = state.cart.find((item) => item.variantID === newItem.variantID);
+        if (exist) {
+          exist.quantity += newItem.quantity;
+        } else {
+          state.cart.push(newItem);
+        }
+        calculateCart(state);
+        toast.success(`Đã thêm sản phẩm ${newItem?.productName} vào giỏ hàng`); // You can customize the message as needed
+      })
+
       .addCase(logout, () => initialState);
   },
 });
@@ -176,6 +212,7 @@ export const {
   toggleSelectAllItems,
   updatePreorderReadyStatus,
   removeSelectedItems,
+  setSelectedProductForPrescription,
   clearCart,
 } = cartSlice.actions;
 
