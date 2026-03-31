@@ -38,10 +38,8 @@ export default function ProductList() {
   const itemsPerPage = 8;
 
   useEffect(() => {
-    if (!products.length) {
-      dispatch(fetchProducts());
-    }
-  }, [dispatch, products.length]);
+    dispatch(fetchProducts());
+  }, [dispatch]);
 
   useEffect(() => {
     if (!categories.length) {

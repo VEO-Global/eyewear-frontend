@@ -1,5 +1,12 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import api from "../../configs/config-axios";
+import { addNotification } from "../notification/notificationSlice";
 import { fetchProfile, logout } from "../auth/authSlice";
+import {
+  getProductAvailability,
+  getVariantStock,
+  isPreorderProduct,
+} from "../../utils/productCatalog";
 
 function getCartStorageKey(userId) {
   return `cart:${userId}`;
@@ -32,7 +39,10 @@ const initialState = {
 };
 
 function calculateCart(state) {
-  state.totalProduct = state.cart.reduce((total, item) => total + item.quantity, 0);
+  state.totalProduct = state.cart.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
   state.totalPrice = state.cart.reduce(
     (total, item) => total + item.variantPrice * item.quantity,
     0
@@ -42,6 +52,142 @@ function calculateCart(state) {
 function isSelectableCartItem(item) {
   return !item?.isPreorder || item?.isPreorderReady;
 }
+
+function syncSelectedVariantIds(state) {
+  state.selectedVariantIds = state.cart
+    .filter((item) => isSelectableCartItem(item))
+    .map((item) => item.variantID)
+    .filter((variantId, index, items) => items.indexOf(variantId) === index);
+}
+
+function applyCartItemAvailability(state, variantId, nextAvailability = {}) {
+  const item = state.cart.find((cartItem) => cartItem.variantID === variantId);
+
+  if (!item) {
+    return;
+  }
+
+  item.isPreorder = Boolean(nextAvailability.isPreorder);
+  item.isPreorderReady = Boolean(nextAvailability.isPreorderReady);
+}
+
+function extractProducts(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.content)) {
+    return payload.content;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  return [];
+}
+
+function resolveMatchingVariant(product, cartItem) {
+  if (!Array.isArray(product?.variants) || !product.variants.length) {
+    return null;
+  }
+
+  return (
+    product.variants.find(
+      (variant) => Number(variant?.id) === Number(cartItem?.variantID)
+    ) ||
+    product.variants.find(
+      (variant) =>
+        String(variant?.color || "").trim().toLowerCase() ===
+          String(cartItem?.color || "").trim().toLowerCase() &&
+        String(variant?.size || "").trim().toLowerCase() ===
+          String(cartItem?.size || "").trim().toLowerCase()
+    ) ||
+    null
+  );
+}
+
+export const syncPreorderCartAvailability = createAsyncThunk(
+  "cart/syncPreorderCartAvailability",
+  async (_, { dispatch, getState, rejectWithValue }) => {
+    const cartItems = getState()?.cart?.cart || [];
+
+    if (!cartItems.length) {
+      return [];
+    }
+
+    try {
+      const response = await api.get("/products");
+      const products = extractProducts(response.data);
+      const productMap = new Map(
+        products.map((product) => [
+          Number(product?.id ?? product?.productId ?? product?.productID),
+          product,
+        ])
+      );
+
+      const syncedItems = cartItems
+        .map((cartItem) => {
+          const product = productMap.get(Number(cartItem?.productID));
+
+          if (!product) {
+            return null;
+          }
+
+          const matchingVariant = resolveMatchingVariant(product, cartItem);
+          const hasVariantStock = matchingVariant
+            ? getVariantStock(matchingVariant) > 0
+            : false;
+          const isProductPreorder = isPreorderProduct(product);
+          const isProductNowAvailable =
+            !isProductPreorder ||
+            getProductAvailability(product) === "in_stock";
+          const isPreorderReady =
+            !isProductPreorder || hasVariantStock || isProductNowAvailable;
+
+          return {
+            variantId: cartItem.variantID,
+            productName: cartItem.name,
+            isPreorder: isProductPreorder,
+            isPreorderReady,
+            wasPreorder: Boolean(cartItem?.isPreorder),
+            wasPreorderReady: Boolean(cartItem?.isPreorderReady),
+          };
+        })
+        .filter(Boolean);
+
+      syncedItems
+        .filter(
+          (item) =>
+            item.wasPreorder &&
+            !item.wasPreorderReady &&
+            (!item.isPreorder || item.isPreorderReady)
+        )
+        .forEach((item) => {
+          const message = item.isPreorder
+            ? `Sản phẩm đặt trước "${item.productName}" đã có hàng trong giỏ và có thể chọn để thanh toán.`
+            : `Sản phẩm "${item.productName}" đã được mở bán và sẵn sàng để thanh toán trong giỏ hàng.`;
+
+          dispatch(
+            addNotification({
+              type: "success",
+              message,
+            })
+          );
+        });
+
+      return syncedItems;
+    } catch (error) {
+      return rejectWithValue(
+        error?.response?.data?.message || "Khong the dong bo gio hang"
+      );
+    }
+  }
+);
 
 const cartSlice = createSlice({
   name: "cart",
@@ -85,7 +231,9 @@ const cartSlice = createSlice({
       const { variantId, type } = action.payload;
       const item = state.cart.find((i) => i.variantID === variantId);
 
-      if (!item) return;
+      if (!item) {
+        return;
+      }
 
       if (type === "+") item.quantity += 1;
       if (type === "-" && item.quantity > 1) item.quantity -= 1;
@@ -97,7 +245,9 @@ const cartSlice = createSlice({
       const variantId = action.payload;
 
       if (state.selectedVariantIds.includes(variantId)) {
-        state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
+        state.selectedVariantIds = state.selectedVariantIds.filter(
+          (id) => id !== variantId
+        );
       } else if (
         state.cart.some(
           (item) => item.variantID === variantId && isSelectableCartItem(item)
@@ -124,21 +274,19 @@ const cartSlice = createSlice({
 
     updatePreorderReadyStatus(state, action) {
       const { variantId, isReady } = action.payload || {};
-      const item = state.cart.find((cartItem) => cartItem.variantID === variantId);
-
-      if (!item) return;
-
-      item.isPreorderReady = Boolean(isReady);
-
-      if (!isSelectableCartItem(item)) {
-        state.selectedVariantIds = state.selectedVariantIds.filter((id) => id !== variantId);
-      }
+      applyCartItemAvailability(state, variantId, {
+        isPreorder: true,
+        isPreorderReady: isReady,
+      });
+      syncSelectedVariantIds(state);
     },
 
     removeSelectedItems(state, action) {
       const variantIds = Array.isArray(action.payload) ? action.payload : [];
 
-      state.cart = state.cart.filter((item) => !variantIds.includes(item.variantID));
+      state.cart = state.cart.filter(
+        (item) => !variantIds.includes(item.variantID)
+      );
       state.selectedVariantIds = state.selectedVariantIds.filter(
         (id) => !variantIds.includes(id)
       );
@@ -157,11 +305,20 @@ const cartSlice = createSlice({
       .addCase(fetchProfile.fulfilled, (state, action) => {
         if (!state.cart.length) {
           state.cart = getStoredCart(action.payload?.id);
-          state.selectedVariantIds = state.cart
-            .filter((item) => isSelectableCartItem(item))
-            .map((item) => item.variantID);
+          syncSelectedVariantIds(state);
         }
 
+        calculateCart(state);
+      })
+      .addCase(syncPreorderCartAvailability.fulfilled, (state, action) => {
+        (action.payload || []).forEach((item) => {
+          applyCartItemAvailability(state, item.variantId, {
+            isPreorder: item.isPreorder,
+            isPreorderReady: item.isPreorderReady,
+          });
+        });
+
+        syncSelectedVariantIds(state);
         calculateCart(state);
       })
       .addCase(logout, () => initialState);

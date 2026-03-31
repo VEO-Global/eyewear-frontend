@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
 import { logout } from "../../redux/auth/authSlice";
 import { fetchProducts } from "../../redux/products/producSlice";
+import { syncPreorderCartAvailability } from "../../redux/cart/cartSlice";
 import DropDownMenu from "./DropDownMenu";
 import {
   markAllNotificationsAsRead,
@@ -13,8 +14,8 @@ import {
 import { appToast } from "../../utils/appToast";
 import { getRoleDisplayLabel, isManagerRole, isStaffRole } from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
+import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE } from "../../utils/orderHistory";
-import { readStaffIntakeOrders, readStaffOrdersByPhase } from "../../utils/staffOrders";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -138,7 +139,7 @@ export function Header() {
   ];
 
   const { user, isAuthenticated } = useSelector((state) => state.auth);
-  const { totalProduct } = useSelector((state) => state.cart);
+  const { cart, totalProduct } = useSelector((state) => state.cart);
   const { items: notifications } = useSelector((state) => state.notifications);
   const { products } = useSelector((state) => state.products);
   const navigate = useNavigate();
@@ -150,9 +151,9 @@ export function Header() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [staffTaskCounts, setStaffTaskCounts] = useState(() => ({
-    "order-intake": readStaffIntakeOrders().length,
-    "prescription-support": readStaffOrdersByPhase(ORDER_PHASE.PRESCRIPTION_REVIEW).length,
-    "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING).length,
+    "order-intake": 0,
+    "prescription-support": 0,
+    "operations-handoff": 0,
     "after-sales": 0,
   }));
   const notificationRef = useRef(null);
@@ -170,6 +171,29 @@ export function Header() {
       dispatch(fetchProducts());
     }
   }, [dispatch, products.length]);
+
+  useEffect(() => {
+    if (!isAuthenticated || staffOnly || managerOnly || !cart.length) {
+      return undefined;
+    }
+
+    dispatch(syncPreorderCartAvailability());
+
+    const intervalId = window.setInterval(() => {
+      dispatch(syncPreorderCartAvailability());
+    }, 30000);
+
+    function handleWindowFocus() {
+      dispatch(syncPreorderCartAvailability());
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [cart.length, dispatch, isAuthenticated, managerOnly, staffOnly]);
 
   const productSearchItems = useMemo(
     () =>
@@ -303,30 +327,47 @@ export function Header() {
       return undefined;
     }
 
-    function syncStaffTaskCounts() {
-      setStaffTaskCounts({
-        "order-intake": readStaffIntakeOrders().length,
-        "prescription-support": readStaffOrdersByPhase(ORDER_PHASE.PRESCRIPTION_REVIEW).length,
-        "operations-handoff": readStaffOrdersByPhase(ORDER_PHASE.PROCESSING).length,
-        "after-sales": 0,
-      });
+    let active = true;
+
+    async function syncStaffTaskCounts() {
+      try {
+        const [intakeOrders, prescriptionOrders, handoffOrders] = await Promise.all([
+          staffOrderApi.fetchStaffOrders({ phase: ORDER_PHASE.PENDING_CONFIRMATION }),
+          staffOrderApi.fetchStaffOrders({ phase: ORDER_PHASE.PRESCRIPTION_REVIEW }),
+          staffOrderApi.fetchReadyForHandoffOrders(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setStaffTaskCounts({
+          "order-intake": intakeOrders.length,
+          "prescription-support": prescriptionOrders.length,
+          "operations-handoff": handoffOrders.length,
+          "after-sales": 0,
+        });
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setStaffTaskCounts((current) => ({
+          ...current,
+          "order-intake": 0,
+          "prescription-support": 0,
+          "operations-handoff": 0,
+        }));
+      }
     }
 
     syncStaffTaskCounts();
 
-    const intervalId = window.setInterval(syncStaffTaskCounts, 1500);
-
-    function handleStorage(event) {
-      if (!event.key || event.key.startsWith("order-history:")) {
-        syncStaffTaskCounts();
-      }
-    }
-
-    window.addEventListener("storage", handleStorage);
+    const intervalId = window.setInterval(syncStaffTaskCounts, 30000);
 
     return () => {
+      active = false;
       window.clearInterval(intervalId);
-      window.removeEventListener("storage", handleStorage);
     };
   }, [staffOnly]);
 

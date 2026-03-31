@@ -58,7 +58,7 @@ export function WhyChooseUs() {
 
           <div className="relative h-full min-h-[400px] rounded-2xl overflow-hidden shadow-2xl">
             <img
-              src="https://images.unsplash.com/photo-1570222094114-28a9d8896b74?auto=format&fit=crop&q=80&w=1000"
+              src="https://www.istockphoto.com/photos/reflection-of-eyes"
               alt="Optometrist examining patient"
               className="absolute inset-0 w-full h-full object-cover"
             />

@@ -13,7 +13,9 @@ function normalizeImageUrls(product) {
     return imageUrls.map((item) => String(item || "").trim()).filter(Boolean);
   }
 
-  return [product?.imageUrl].filter(Boolean);
+  return [product?.imageUrl ?? product?.thumbnailUrl ?? product?.image]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
 }
 
 function buildInitialProductValues(product) {
@@ -299,24 +301,18 @@ export default function ManagerProductUpdatePage() {
     try {
       if (isCreateMode) {
         const createdProduct = await managerApi.createProduct(payload);
-        const mergedProduct = {
-          ...createdProduct,
-          imageUrls,
-        };
+        const mergedProduct = await managerApi.fetchProductDetail(createdProduct.id);
 
         appToast.success("Tạo sản phẩm thành công.");
         navigate(`/manager/products/${mergedProduct.id}/edit`, { replace: true });
         return;
       }
 
-      const updatedProduct = await managerApi.updateProduct(id, payload);
-      const mergedProduct = {
-        ...updatedProduct,
-        imageUrls,
-      };
+      await managerApi.updateProduct(id, payload);
+      const refreshedProduct = await managerApi.fetchProductDetail(id);
 
-      setProduct(mergedProduct);
-      form.setFieldsValue(buildInitialProductValues(mergedProduct));
+      setProduct(refreshedProduct);
+      form.setFieldsValue(buildInitialProductValues(refreshedProduct));
       appToast.success("Cập nhật sản phẩm thành công.");
     } catch (saveError) {
       appToast.error(

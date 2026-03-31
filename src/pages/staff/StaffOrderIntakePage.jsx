@@ -1,31 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { Alert, Spin } from "antd";
 import { ClipboardList, PackageSearch, PhoneCall, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import StaffWorkspaceLayout from "../../components/staff/StaffWorkspaceLayout";
 import { addNotification } from "../../redux/notification/notificationSlice";
+import { extractErrorMessage } from "../../services/managerApi";
+import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE, formatCurrency } from "../../utils/orderHistory";
-import { readStaffIntakeOrders, updateStoredOrderForStaff } from "../../utils/staffOrders";
+import { appToast } from "../../utils/appToast";
 
 const STAFF_HIGHLIGHTED_ORDER_KEY = "staff-highlighted-order";
+const POLLING_INTERVAL_MS = 15000;
 
-function getPriorityClass(priority) {
-  if (priority === "Cao") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
-  }
-
-  if (priority === "Thuong") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-
-  return "border-slate-200 bg-slate-100 text-slate-700";
-}
-
-function QueueCard({ item, onPrimaryAction, onShowDetails }) {
+function QueueCard({ item, onPrimaryAction, onShowDetails, isActing }) {
   const primaryLabel = item.requiresPrescription ? "Kiểm tra đơn thuốc" : "Xác nhận đơn hàng";
-  const secondaryLabel = item.requiresPrescription
-    ? "Xem chi tiết sản phẩm"
-    : "Xem chi tiết đơn hàng";
+  const secondaryLabel = item.requiresPrescription ? "Xem chi tiết sản phẩm" : "Xem chi tiết đơn hàng";
 
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -35,13 +25,6 @@ function QueueCard({ item, onPrimaryAction, onShowDetails }) {
             <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
               {item.code}
             </span>
-            {item.priority ? (
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPriorityClass(item.priority)}`}
-              >
-                Ưu tiên {item.priority === "Thuong" ? "thường" : "cao"}
-              </span>
-            ) : null}
             {item.requiresPrescription ? (
               <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                 Có đơn thuốc
@@ -65,13 +48,14 @@ function QueueCard({ item, onPrimaryAction, onShowDetails }) {
         <button
           type="button"
           onClick={() => onPrimaryAction(item)}
-          className="rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+          disabled={isActing}
+          className="rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {primaryLabel}
         </button>
         <button
           type="button"
-          onClick={() => onShowDetails(item)}
+          onClick={() => onShowDetails(item.id)}
           className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           {secondaryLabel}
@@ -89,20 +73,22 @@ function EmptyQueue() {
   );
 }
 
-function OrderDetailModal({ order, onClose }) {
-  if (!order) {
+function OrderDetailModal({ order, loading, onClose }) {
+  if (!order && !loading) {
     return null;
   }
 
-  const shippingAddress = order.shippingAddress;
-  const addressLine = [
-    shippingAddress?.addressDetail,
-    shippingAddress?.wardName || shippingAddress?.ward,
-    shippingAddress?.districtName || shippingAddress?.district,
-    shippingAddress?.provinceName || shippingAddress?.province,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const shippingAddress =
+    typeof order?.shippingAddress === "string"
+      ? order.shippingAddress
+      : [
+          order?.shippingAddress?.addressDetail,
+          order?.shippingAddress?.wardName || order?.shippingAddress?.ward,
+          order?.shippingAddress?.districtName || order?.shippingAddress?.district,
+          order?.shippingAddress?.provinceName || order?.shippingAddress?.province,
+        ]
+          .filter(Boolean)
+          .join(", ");
 
   return (
     <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/45 px-4 py-8">
@@ -112,9 +98,11 @@ function OrderDetailModal({ order, onClose }) {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-500">
               Chi tiết đơn hàng
             </p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{order.code}</h2>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+              {order?.code || "Đang tải..."}
+            </h2>
             <p className="mt-2 text-sm text-slate-500">
-              {order.customer} • {order.customerPhone || "Chưa có số điện thoại"}
+              {order?.customer || "Đang tải"} • {order?.customerPhone || "Chưa có số điện thoại"}
             </p>
           </div>
 
@@ -127,76 +115,80 @@ function OrderDetailModal({ order, onClose }) {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
-              <h3 className="text-lg font-bold text-slate-900">Thông tin người đặt</h3>
-              <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
-                <p>
-                  <span className="font-semibold text-slate-900">Họ tên:</span> {order.customer}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Email:</span>{" "}
-                  {order.customerEmail || "Chưa có"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Số điện thoại:</span>{" "}
-                  {order.customerPhone || "Chưa có"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Người nhận:</span>{" "}
-                  {order.receiverName || order.customer}
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
-              <h3 className="text-lg font-bold text-slate-900">Thông tin đơn hàng</h3>
-              <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
-                <p>
-                  <span className="font-semibold text-slate-900">Tổng tiền:</span> {order.totalText}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Kênh:</span> {order.channel}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Đơn thuốc:</span>{" "}
-                  {order.requiresPrescription ? "Có" : "Không"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Ghi chú:</span>{" "}
-                  {order.note || "Không có"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Địa chỉ giao hàng:</span>{" "}
-                  {addressLine || "Chưa có"}
-                </p>
-              </div>
-            </div>
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Spin size="large" />
           </div>
-
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
-            <h3 className="text-lg font-bold text-slate-900">Sản phẩm trong đơn</h3>
-            <div className="mt-4 space-y-3">
-              {(order.items || []).map((entry) => (
-                <div key={entry.orderItemId || entry.variantID} className="rounded-[20px] bg-white px-4 py-4">
-                  <p className="font-semibold text-slate-900">{entry.name || entry.productName || "Sản phẩm"}</p>
-                  <p className="mt-1 text-sm text-slate-500">Số lượng: {entry.quantity || 1}</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Đơn giá: {formatCurrency((entry.variantPrice || entry.price || 0) * (entry.quantity || 1))}
+        ) : (
+          <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-6">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+                <h3 className="text-lg font-bold text-slate-900">Thông tin người đặt</h3>
+                <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
+                  <p>
+                    <span className="font-semibold text-slate-900">Họ tên:</span> {order?.customer}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Email:</span> {order?.customerEmail || "Chưa có"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Số điện thoại:</span>{" "}
+                    {order?.customerPhone || "Chưa có"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Người nhận:</span>{" "}
+                    {order?.receiverName || order?.customer}
                   </p>
                 </div>
-              ))}
+              </div>
 
-              {order.lensProduct ? (
-                <div className="rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-4">
-                  <p className="font-semibold text-slate-900">{order.lensProduct.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{order.lensProduct.description || "Tròng kính"}</p>
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+                <h3 className="text-lg font-bold text-slate-900">Thông tin đơn hàng</h3>
+                <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
+                  <p>
+                    <span className="font-semibold text-slate-900">Tổng tiền:</span> {order?.totalText}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Kênh:</span> {order?.channel}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Đơn thuốc:</span>{" "}
+                    {order?.requiresPrescription ? "Có" : "Không"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Ghi chú:</span> {order?.note || "Không có"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Địa chỉ giao hàng:</span>{" "}
+                    {shippingAddress || "Chưa có"}
+                  </p>
                 </div>
-              ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+              <h3 className="text-lg font-bold text-slate-900">Sản phẩm trong đơn</h3>
+              <div className="mt-4 space-y-3">
+                {(order?.items || []).map((entry) => (
+                  <div key={entry.orderItemId || entry.id} className="rounded-[20px] bg-white px-4 py-4">
+                    <p className="font-semibold text-slate-900">{entry.name || entry.productName || "Sản phẩm"}</p>
+                    <p className="mt-1 text-sm text-slate-500">Số lượng: {entry.quantity || 1}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Đơn giá: {formatCurrency((entry.variantPrice || entry.price || 0) * (entry.quantity || 1))}
+                    </p>
+                  </div>
+                ))}
+
+                {order?.lensProduct ? (
+                  <div className="rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-4">
+                    <p className="font-semibold text-slate-900">{order.lensProduct.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{order.lensProduct.description || "Tròng kính"}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -205,15 +197,26 @@ function OrderDetailModal({ order, onClose }) {
 export default function StaffOrderIntakePage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [orders, setOrders] = useState(() => readStaffIntakeOrders());
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [actingOrderId, setActingOrderId] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const seenOrderIdsRef = useRef(new Set(orders.map((item) => item.id)));
+  const [detailLoading, setDetailLoading] = useState(false);
+  const seenOrderIdsRef = useRef(new Set());
 
-  useEffect(() => {
-    function syncOrders() {
-      const nextOrders = readStaffIntakeOrders();
+  async function loadOrders({ silent = false } = {}) {
+    if (!silent) {
+      setLoading(true);
+    }
+
+    try {
+      const nextOrders = await staffOrderApi.fetchStaffOrders({
+        phase: ORDER_PHASE.PENDING_CONFIRMATION,
+      });
 
       setOrders(nextOrders);
+      setError("");
 
       const previousIds = seenOrderIdsRef.current;
       const nextIds = new Set(nextOrders.map((item) => item.id));
@@ -229,25 +232,22 @@ export default function StaffOrderIntakePage() {
       });
 
       seenOrderIdsRef.current = nextIds;
+    } catch (apiError) {
+      setError(extractErrorMessage(apiError, "Không thể tải danh sách đơn hàng."));
+    } finally {
+      setLoading(false);
     }
+  }
 
-    syncOrders();
+  useEffect(() => {
+    loadOrders();
 
-    const intervalId = window.setInterval(syncOrders, 1500);
+    const intervalId = window.setInterval(() => {
+      loadOrders({ silent: true });
+    }, POLLING_INTERVAL_MS);
 
-    function handleStorage(event) {
-      if (!event.key || event.key.startsWith("order-history:")) {
-        syncOrders();
-      }
-    }
-
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [dispatch]);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const todayFlow = [
     {
@@ -264,48 +264,59 @@ export default function StaffOrderIntakePage() {
     },
     {
       label: "Cần gọi lại khách",
-      value: `${orders.filter((item) => item.priority === "Cao").length} đơn`,
+      value: "0 đơn",
       icon: PhoneCall,
       tone: "rose",
     },
   ];
 
-  function handlePrimaryAction(order) {
-    const targetPath = order.requiresPrescription
-      ? "/staff/prescription-support"
-      : "/staff/operations-handoff";
+  async function openOrderDetails(orderId) {
+    setDetailLoading(true);
+    setSelectedOrder({});
 
-    sessionStorage.setItem(
-      STAFF_HIGHLIGHTED_ORDER_KEY,
-      JSON.stringify({
-        highlightedOrderId: order.id,
-        highlightedOrderCode: order.code,
-        targetPath,
-      })
-    );
+    try {
+      const detail = await staffOrderApi.fetchStaffOrderDetail(orderId);
+      setSelectedOrder(detail);
+    } catch (apiError) {
+      appToast.error(extractErrorMessage(apiError, "Không thể tải chi tiết đơn hàng."));
+      setSelectedOrder(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
-    updateStoredOrderForStaff({
-      storageUserId: order.storageUserId,
-      orderId: order.id,
-      updater: (currentOrder) => ({
-        ...currentOrder,
-        phase: order.requiresPrescription ? ORDER_PHASE.PRESCRIPTION_REVIEW : ORDER_PHASE.PROCESSING,
-        updatedAt: new Date().toISOString(),
-      }),
-    });
+  async function handlePrimaryAction(order) {
+    setActingOrderId(order.id);
 
-    navigate(targetPath, {
-      state: {
-        highlightedOrderId: order.id,
-        highlightedOrderCode: order.code,
-      },
-    });
+    try {
+      const updatedOrder = await staffOrderApi.confirmStaffOrder(order.id);
+      const targetPath =
+        updatedOrder.phase === ORDER_PHASE.PRESCRIPTION_REVIEW || updatedOrder.requiresPrescription
+          ? "/staff/prescription-support"
+          : "/staff/operations-handoff";
 
-    window.setTimeout(() => {
-      if (window.location.pathname !== targetPath) {
-        window.location.assign(targetPath);
-      }
-    }, 0);
+      sessionStorage.setItem(
+        STAFF_HIGHLIGHTED_ORDER_KEY,
+        JSON.stringify({
+          highlightedOrderId: updatedOrder.id,
+          highlightedOrderCode: updatedOrder.code,
+          targetPath,
+        })
+      );
+
+      await loadOrders({ silent: true });
+
+      navigate(targetPath, {
+        state: {
+          highlightedOrderId: updatedOrder.id,
+          highlightedOrderCode: updatedOrder.code,
+        },
+      });
+    } catch (apiError) {
+      appToast.error(extractErrorMessage(apiError, "Không thể xác nhận đơn hàng."));
+    } finally {
+      setActingOrderId(null);
+    }
   }
 
   return (
@@ -313,8 +324,7 @@ export default function StaffOrderIntakePage() {
       <StaffWorkspaceLayout
         eyebrow="Workspace 01"
         title="Tiếp nhận và xử lý đơn hàng"
-        description="Màn hình staff nhận đơn mới theo thời gian thực, tách nhanh luồng có đơn thuốc và không có đơn thuốc để đẩy sang bước xử lý tiếp theo."
-        currentPath="/staff/orders-intake"
+        description="Màn hình staff nhận đơn mới theo dữ liệu thật từ hệ thống, tách nhanh luồng có đơn thuốc và không có đơn thuốc để chuyển sang bước xử lý tiếp theo."
         stats={[]}
         leftColumn={
           <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
@@ -323,19 +333,33 @@ export default function StaffOrderIntakePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-500">
                   Đơn hàng chờ xử lý
                 </p>
-
                 <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Toàn bộ đơn hàng</h2>
               </div>
             </div>
 
+            {error ? (
+              <Alert
+                type="error"
+                showIcon
+                message="Không thể tải dữ liệu đơn hàng"
+                description={error}
+                className="mt-6"
+              />
+            ) : null}
+
             <div className="mt-6 space-y-4">
-              {orders.length > 0 ? (
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <Spin size="large" />
+                </div>
+              ) : orders.length > 0 ? (
                 orders.map((item) => (
                   <QueueCard
                     key={item.id}
                     item={item}
+                    isActing={actingOrderId === item.id}
                     onPrimaryAction={handlePrimaryAction}
-                    onShowDetails={setSelectedOrder}
+                    onShowDetails={openOrderDetails}
                   />
                 ))
               ) : (
@@ -379,7 +403,7 @@ export default function StaffOrderIntakePage() {
         }
       />
 
-      <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      <OrderDetailModal order={selectedOrder} loading={detailLoading} onClose={() => setSelectedOrder(null)} />
     </>
   );
 }

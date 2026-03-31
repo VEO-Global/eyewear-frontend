@@ -180,6 +180,14 @@ function buildProductPayload(payload) {
   const normalizedImages = Array.isArray(payload?.imageUrls)
     ? payload.imageUrls.map((item) => String(item || "").trim()).filter(Boolean)
     : undefined;
+  const normalizedModel3dUrl =
+    payload?.model3dUrl === null || payload?.model3dUrl === undefined
+      ? undefined
+      : String(payload.model3dUrl).trim();
+  const normalizedImageUrl =
+    payload?.imageUrl === null || payload?.imageUrl === undefined
+      ? normalizedImages?.[0] || payload?.thumbnailUrl || undefined
+      : String(payload.imageUrl).trim();
 
   return cleanPayload({
     name: payload?.name?.trim?.() || payload?.name,
@@ -187,16 +195,12 @@ function buildProductPayload(payload) {
     description: payload?.description?.trim?.() || payload?.description,
     material: payload?.material?.trim?.() || undefined,
     gender: payload?.gender?.trim?.() || undefined,
-    model3dUrl: payload?.model3dUrl?.trim?.() || undefined,
+    model3dUrl: normalizedModel3dUrl,
     categoryId: normalizeOptionalNumber(payload?.categoryId),
     status: payload?.status?.trim?.()?.toUpperCase?.() || undefined,
     catalogType: payload?.catalogType?.trim?.()?.toUpperCase?.() || undefined,
     basePrice: normalizeNumber(payload?.price ?? payload?.basePrice ?? payload?.sellingPrice, 0),
-    imageUrl:
-      payload?.imageUrl?.trim?.() ||
-      normalizedImages?.[0] ||
-      payload?.thumbnailUrl ||
-      undefined,
+    imageUrl: normalizedImageUrl,
     active: payload?.active ?? payload?.isActive,
     isActive: payload?.isActive ?? payload?.active,
   });
@@ -233,6 +237,9 @@ function normalizeVariant(item) {
 }
 
 function normalizeProduct(item) {
+  const fallbackImageUrl =
+    item?.imageUrl ?? item?.thumbnailUrl ?? item?.image ?? "";
+
   return {
     ...item,
     id: item?.id ?? item?.productId ?? item?.productID,
@@ -250,15 +257,15 @@ function normalizeProduct(item) {
     isActive: normalizeBoolean(item?.isActive ?? item?.active ?? item?.is_active ?? true),
     price: normalizeNumber(item?.price ?? item?.basePrice ?? item?.sellingPrice, 0),
     basePrice: normalizeNumber(item?.basePrice ?? item?.price ?? item?.sellingPrice, 0),
-    imageUrl: item?.imageUrl ?? item?.thumbnailUrl ?? "",
+    imageUrl: fallbackImageUrl,
     imageUrls: Array.isArray(item?.imageUrls)
       ? item.imageUrls.filter(Boolean)
       : Array.isArray(item?.images)
         ? item.images
             .map((image) => image?.url ?? image?.imageUrl ?? image?.src)
             .filter(Boolean)
-        : item?.imageUrl
-          ? [item.imageUrl]
+        : fallbackImageUrl
+          ? [fallbackImageUrl]
           : [],
   };
 }

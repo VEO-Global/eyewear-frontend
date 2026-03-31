@@ -50,6 +50,13 @@ function getUserIdLabel(role) {
     return "Mã nhân viên";
   }
 
+  if (role === "OPERATIONS") {
+    return "Mã nhân viên gia công";
+  }
+  if (role === "MANAGER") {
+    return "Mã quản lý";
+  }
+
   return "Mã khách hàng";
 }
 
