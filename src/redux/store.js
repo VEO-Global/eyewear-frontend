@@ -10,6 +10,7 @@ import locationReducer from "./location/locationSlice";
 import lenReducer from "./lens/lensSlice";
 import paymentReducer from "./payment/paymentSlice";
 import orderReducer from "./order/orderSlice";
+import operationReducer from "./operation/operationSlice";
 const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -22,6 +23,7 @@ const store = configureStore({
     lens: lenReducer,
     payment: paymentReducer,
     order: orderReducer,
+    operation: operationReducer,
   },
 });
 

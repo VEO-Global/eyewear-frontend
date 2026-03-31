@@ -18,6 +18,17 @@ export const getOrderQr = createAsyncThunk("payment/getQr", async (orderId, { re
   }
 });
 
+export const payMyOrder = createAsyncThunk("payment/payMyOrder", async (orderId, { rejectWithValue }) => {
+  try {
+    const response = await api.post("/payments/customer-pay");
+    console.log(response);
+
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || "Không thể lấy sản phẩm");
+  }
+});
+
 const paymentSlice = createSlice({
   name: "payment",
   initialState,

@@ -12,7 +12,11 @@ import {
 import { useForm } from "antd/es/form/Form";
 import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { getOrderQr, setPaymentMethod } from "../../redux/payment/paymentSlice";
+import {
+  getOrderQr,
+  payMyOrder,
+  setPaymentMethod,
+} from "../../redux/payment/paymentSlice";
 
 const formatDate = (dateString) => {
   const date = new Date(dateString);
@@ -31,19 +35,16 @@ const formatCurrency = (amount) => {
 };
 export default function InvoiceItems({ invoice }) {
   const { loading } = useSelector((state) => state.order);
-  const paymentLoading = useSelector((state) => state.payment.loading);
 
-  const { paymentInfor, paymentMethod } = useSelector((state) => state.payment);
-
-  console.log(paymentInfor);
-
+  const { paymentInfor } = useSelector((state) => state.payment);
+  const [form] = useForm();
+  const method = Form.useWatch("paymentMethod", form);
   const dispatch = useDispatch();
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 3;
 
   const [payOrderModal, setPayOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [form] = useForm();
 
   const isUnpaid = (order) =>
     !order.paymentStatus || order.status === "PENDING_PAYMENT";
@@ -60,22 +61,25 @@ export default function InvoiceItems({ invoice }) {
   }, [filteredOrders, currentPage]);
 
   useEffect(() => {
-    form.setFieldsValue({
-      paymentMethod: "COD",
-    });
+    if (payOrderModal) {
+      form.setFieldsValue({
+        paymentMethod: "COD",
+      });
+      dispatch(setPaymentMethod("COD"));
+    }
+  }, [payOrderModal, form, dispatch]);
 
-    if (paymentMethod === "BANK_TRANSFER" && selectedOrder?.orderId) {
+  useEffect(() => {
+    if (method === "BANK_TRANSFER" && selectedOrder?.orderId) {
       dispatch(getOrderQr(selectedOrder.orderId));
     }
-  }, [paymentMethod, selectedOrder, dispatch, form]);
-
+  }, [method, selectedOrder, dispatch]);
   if (!filteredOrders.length) {
     return <Empty description="Không có hóa đơn chưa thanh toán" />;
   }
 
   const handleOpenPay = (order) => {
     setSelectedOrder(order);
-    dispatch(getOrderQr(order.orderId));
     setPayOrderModal(true);
   };
 
@@ -84,8 +88,6 @@ export default function InvoiceItems({ invoice }) {
     dispatch(setPaymentMethod("COD"));
     setSelectedOrder(null);
   };
-
-  function handlePayOrder() {}
 
   return (
     <div>
@@ -156,8 +158,19 @@ export default function InvoiceItems({ invoice }) {
           <Modal
             open={payOrderModal}
             onCancel={handleClose}
-            onOk={() => form.submit()}
             title="Thanh toán đơn hàng"
+            footer={[
+              <Button key="close" onClick={handleClose}>
+                Đóng
+              </Button>,
+              <Button
+                key="submit"
+                type="primary"
+                onClick={() => dispatch(payMyOrder())}
+              >
+                Thanh toán
+              </Button>,
+            ]}
           >
             <Form form={form} layout="vertical">
               <Form.Item label="Mã đơn">
@@ -190,11 +203,11 @@ export default function InvoiceItems({ invoice }) {
                 </Select>
               </Form.Item>
 
-              {paymentMethod === "BANK_TRANSFER" && (
+              {method === "BANK_TRANSFER" && paymentInfor?.qrCodeUrl && (
                 <div className="mt-4 text-center">
                   <p className="mb-2 font-medium">Quét mã để thanh toán</p>
                   <img
-                    src={paymentInfor?.qrCodeUrl}
+                    src={paymentInfor.qrCodeUrl}
                     alt="QR Code"
                     className="mx-auto w-40 h-40"
                   />

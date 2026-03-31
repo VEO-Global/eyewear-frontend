@@ -10,6 +10,10 @@ import { fetchProvinces } from "./redux/location/locationSlice";
 import { fetchAllLens } from "./redux/lens/lensSlice";
 import { getMyCart } from "./redux/cart/cartSlice";
 import { getMyOrder } from "./redux/order/orderSlice";
+import {
+  getAllManufacturingOrder,
+  // updateToManufacturing,
+} from "./redux/operation/operationSlice";
 function App() {
   const dispatch = useDispatch();
   useEffect(() => {
@@ -17,13 +21,21 @@ function App() {
     if (token) {
       dispatch(fetchProfile()).then((res) => {
         const role = res.payload?.role;
-
+        console.log(role);
         if (role === "ADMIN") {
           dispatch(fetchUsers());
         }
+        if (role === "OPERATIONS") {
+          dispatch(getAllManufacturingOrder());
+          // dispatch(updateToManufacturing(5));
+        }
+
+        if (role === "CUSTOMER") {
+          dispatch(getMyOrder());
+        }
       });
     }
-    dispatch(getMyOrder());
+
     dispatch(fetchProducts());
     dispatch(fetchAllCategories());
     dispatch(fetchProvinces());

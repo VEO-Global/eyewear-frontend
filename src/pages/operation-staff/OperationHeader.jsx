@@ -6,7 +6,7 @@ import {
   CheckCircle,
   ShoppingBag,
 } from "lucide-react";
-export default function OperationHeader() {
+export default function OperationHeader({ manufacturingOrders }) {
   return (
     <div className="">
       {/* Header */}
@@ -25,7 +25,7 @@ export default function OperationHeader() {
               title={
                 <span className="text-gray-500 font-medium">Tổng đơn hàng</span>
               }
-              value={12}
+              value={manufacturingOrders.length}
               prefix={<ShoppingBag className="text-blue-500 mr-2" size={20} />}
               style={{
                 fontWeight: 600,
@@ -43,7 +43,7 @@ export default function OperationHeader() {
                   Đang chờ xử lý
                 </span>
               }
-              value={12}
+              value={manufacturingOrders.length}
               prefix={<Package className="text-orange-500 mr-2" size={20} />}
               style={{
                 fontWeight: 600,
@@ -77,7 +77,11 @@ export default function OperationHeader() {
                   Đơn kính theo toa
                 </span>
               }
-              value={1}
+              value={
+                manufacturingOrders.filter(
+                  (o) => o?.orderType === "PRESCRIPTION"
+                )?.length
+              }
               prefix={<Glasses className="text-teal-500 mr-2" size={20} />}
               style={{
                 fontWeight: 600,

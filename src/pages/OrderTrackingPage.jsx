@@ -16,12 +16,10 @@ import { appToast } from "../utils/appToast";
 import { increaseVariantStock } from "../redux/products/producSlice";
 import {
   cancelStoredOrder,
-  enrichOrder,
   formatCurrency,
   formatRemainingTime,
   ORDER_PHASE,
   ORDER_STATUS,
-  readStoredOrders,
 } from "../utils/orderHistory";
 
 const orderTabContent = {
@@ -155,12 +153,16 @@ function filterOrdersByTab(orders, activeTab) {
 
   if (activeTab === ORDER_STATUS.PROCESSING) {
     return orders.filter((order) =>
-      [ORDER_PHASE.PRESCRIPTION_REVIEW, ORDER_PHASE.PROCESSING].includes(order.phase)
+      [ORDER_PHASE.PRESCRIPTION_REVIEW, ORDER_PHASE.PROCESSING].includes(
+        order.phase
+      )
     );
   }
 
   if (activeTab === ORDER_STATUS.READY_TO_DELIVER) {
-    return orders.filter((order) => order.phase === ORDER_PHASE.READY_TO_DELIVER);
+    return orders.filter(
+      (order) => order.phase === ORDER_PHASE.READY_TO_DELIVER
+    );
   }
 
   if (activeTab === ORDER_STATUS.SHIPPING) {
@@ -229,8 +231,8 @@ function StatusPanel({
               Sau khi hủy, đơn hàng sẽ không tiếp tục xử lý nữa.
             </p>
             <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
-              Để hoàn tiền cho sản phẩm vui lòng xem ở phần Trả hàng/hoàn tiền để
-              hoàn thành việc hoàn tiền.
+              Để hoàn tiền cho sản phẩm vui lòng xem ở phần Trả hàng/hoàn tiền
+              để hoàn thành việc hoàn tiền.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-3">
               <button
@@ -284,12 +286,14 @@ function OrderCard({
 }) {
   const firstItem = order.items?.[0];
   const badge =
-    activeTab === ORDER_STATUS.RETURN_REFUND && order.phase === ORDER_PHASE.CANCELED
+    activeTab === ORDER_STATUS.RETURN_REFUND &&
+    order.phase === ORDER_PHASE.CANCELED
       ? {
           label: "Đang chờ hoàn tiền",
           className: "border-amber-200 bg-amber-50 text-amber-700",
         }
-      : phaseBadgeMap[order.phase] || phaseBadgeMap[ORDER_PHASE.PENDING_CONFIRMATION];
+      : phaseBadgeMap[order.phase] ||
+        phaseBadgeMap[ORDER_PHASE.PENDING_CONFIRMATION];
   const processingRemainingMs =
     order.phase === ORDER_PHASE.PROCESSING && order.processingEndsAt
       ? Math.max(0, order.processingEndsAt - now)
@@ -376,8 +380,8 @@ function OrderCard({
 
             {order.phase === ORDER_PHASE.PRESCRIPTION_REVIEW ? (
               <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/80 px-4 py-3 text-sm leading-6 text-violet-800">
-                Đơn hàng này đang chờ nhân viên duyệt đơn thuốc trước khi chuyển sang
-                bước gia công.
+                Đơn hàng này đang chờ nhân viên duyệt đơn thuốc trước khi chuyển
+                sang bước gia công.
               </div>
             ) : null}
 
@@ -386,7 +390,8 @@ function OrderCard({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 font-semibold">
                     <TimerReset className="h-4 w-4" />
-                    Đơn đang được gia công trong vòng 4 tiếng kể từ lúc xác nhận.
+                    Đơn đang được gia công trong vòng 4 tiếng kể từ lúc xác
+                    nhận.
                   </div>
                   <span className="text-lg font-bold tabular-nums">
                     {formatRemainingTime(processingRemainingMs)}
@@ -403,14 +408,18 @@ function OrderCard({
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="font-semibold text-slate-900">
+                        {item.name}
+                      </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        Hãng: {item.brand || "EyeCare"} • Size: {item.size || "--"} •
-                        Màu: {item.color || "--"}
+                        Hãng: {item.brand || "EyeCare"} • Size:{" "}
+                        {item.size || "--"} • Màu: {item.color || "--"}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-slate-500">Số lượng: {item.quantity}</p>
+                      <p className="text-sm text-slate-500">
+                        Số lượng: {item.quantity}
+                      </p>
                       <p className="mt-1 font-semibold text-slate-900">
                         {formatCurrency(item.variantPrice * item.quantity)}
                       </p>
@@ -459,7 +468,8 @@ export default function OrderTrackingPage() {
   const dispatch = useDispatch();
   const userId = useSelector((state) => state.auth.user?.id);
   const [tick, setTick] = useState(() => Date.now());
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { myOrder } = useSelector((state) => state.order);
+
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
 
   useEffect(() => {
@@ -479,15 +489,11 @@ export default function OrderTrackingPage() {
     orderTabContent[activeTab] || orderTabContent[ORDER_STATUS.ALL];
   const ActiveIcon = currentSection.icon;
 
-  const orders = useMemo(
-    () => readStoredOrders(userId).map((order) => enrichOrder(order, tick)),
-    [refreshKey, tick, userId]
-  );
-
   const filteredOrders = useMemo(
-    () => filterOrdersByTab(orders, activeTab),
-    [activeTab, orders]
+    () => filterOrdersByTab(myOrder, activeTab),
+    [activeTab, myOrder]
   );
+  console.log(filteredOrders);
 
   function openCancelConfirmation(order) {
     if (!order?.canCancel) {
@@ -524,7 +530,6 @@ export default function OrderTrackingPage() {
       );
     });
     setConfirmingOrderId(null);
-    setRefreshKey((prev) => prev + 1);
     appToast.success("Đã hủy đơn hàng thành công.");
   }
 
@@ -561,9 +566,9 @@ export default function OrderTrackingPage() {
             </div>
           </div>
 
-          {filteredOrders.length > 0 ? (
+          {myOrder.length > 0 ? (
             <div className="mt-6 space-y-6">
-              {filteredOrders.map((order) => {
+              {myOrder.map((order) => {
                 const isConfirming = confirmingOrderId === order.id;
                 const isMuted = hasActiveConfirmation && !isConfirming;
 
