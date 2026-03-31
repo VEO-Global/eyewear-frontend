@@ -10,19 +10,19 @@ export default function AdminDashBoard() {
   const [roleFilterQuerry, setRoleFilterQuerry] = useState("");
   const ROLE_MAP = {
     OPERATIONS: {
-      label: "NhĂ¢n viĂªn váº­n hĂ nh",
+      label: "Nhân viên vận hành",
       value: "OPERATIONS",
     },
     SALES: {
-      label: "NhĂ¢n viĂªn kinh doanh",
+      label: "Nhân viên kinh doanh",
       value: "SALES",
     },
     MANAGER: {
-      label: "Quáº£n lĂ½",
+      label: "Quản lý",
       value: "MANAGER",
     },
     CUSTOMER: {
-      label: "KhĂ¡ch hĂ ng",
+      label: "Khách hàng",
       value: "CUSTOMER",
     },
   };
