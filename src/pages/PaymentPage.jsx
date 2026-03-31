@@ -1,72 +1,313 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Spin } from "antd";
-import {
-  ArrowBigLeft,
-  CircleCheckBig,
-  Copy,
-  LoaderCircle,
-  QrCode,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  NavLink,
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from "react-router-dom";
+import { ArrowBigLeft, CircleCheckBig, QrCode, ShieldCheck } from "lucide-react";
+import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import api from "../configs/config-axios";
 import CheckOutForm from "../form/CheckOutForm";
 import CheckOutOrderSummary from "../components/checkout/CheckOutOrderSummary";
-import { removeSelectedItems } from "../redux/cart/cartSlice";
-import { decreaseVariantStock } from "../redux/products/producSlice";
-import { appToast } from "../utils/appToast";
-import {
-  CHECKOUT_LENS_SELECTION_STORAGE_KEY,
-} from "../constants/lensProducts";
-import {
-  appendStoredOrder,
-  createStoredOrder,
-  formatCurrency,
-} from "../utils/orderHistory";
+import { fetchCart } from "../redux/cart/cartSlice";
+import { fetchProducts } from "../redux/products/producSlice";
+import { productService } from "../services/productService";
+import { orderService } from "../services/orderService";
+import { paymentService } from "../services/paymentService";
+import { getApiErrorMessage } from "../utils/apiError";
 
-const SHIPPING_COST = 30000;
+function formatCurrency(amount) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    minimumFractionDigits: 0,
+  }).format(Number(amount || 0));
+}
 
-function FakeQrCode() {
-  const qrPattern = [
-    "111101011011111",
-    "100101010010001",
-    "101101111010111",
-    "101000101010101",
-    "111011101110111",
-    "000010010010000",
-    "111010111011101",
-    "001110001000111",
-    "111011111010111",
-    "100010001010001",
-    "101111101111101",
-    "101000101000101",
-    "111110111011111",
-    "100000001000001",
-    "111111111111111",
-  ];
+function normalizePrescriptionOption(value) {
+  return value === "with_prescription" ? "WITH_PRESCRIPTION" : "WITHOUT_PRESCRIPTION";
+}
 
-  return (
-    <div
-      className="mx-auto grid w-[200px] overflow-hidden rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:w-[220px]"
-      style={{ gridTemplateColumns: "repeat(15, minmax(0, 1fr))" }}
-    >
-      {qrPattern.join("").split("").map((cell, index) => (
-        <div
-          key={index}
-          className={`aspect-square ${cell === "1" ? "bg-slate-900" : "bg-white"}`}
-        />
-      ))}
-    </div>
+function normalizePrescriptionPayload(values) {
+  const prescription = values?.prescription;
+
+  if (!prescription || normalizePrescriptionOption(values?.prescriptionOption) !== "WITH_PRESCRIPTION") {
+    return null;
+  }
+
+  const normalizeNumber = (value) => {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  };
+
+  return {
+    prescriptionImageUrl: prescription?.prescriptionImageUrl || null,
+    sphereOd: normalizeNumber(prescription?.sphereOd),
+    sphereOs: normalizeNumber(prescription?.sphereOs),
+    cylinderOd: normalizeNumber(prescription?.cylinderOd),
+    cylinderOs: normalizeNumber(prescription?.cylinderOs),
+    axisOd: normalizeNumber(prescription?.axisOd),
+    axisOs: normalizeNumber(prescription?.axisOs),
+    pd: normalizeNumber(prescription?.pd),
+  };
+}
+
+function unwrapPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return payload;
+  }
+
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+    return unwrapPayload(payload.data);
+  }
+
+  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) {
+    return unwrapPayload(payload.result);
+  }
+
+  return payload;
+}
+
+function pickFirstNumber(...values) {
+  for (const value of values) {
+    const normalizedValue = Number(value);
+
+    if (Number.isFinite(normalizedValue) && normalizedValue >= 0) {
+      return normalizedValue;
+    }
+  }
+
+  return 0;
+}
+
+function normalizeLensProductId(value) {
+  const normalizedValue = Number(value);
+  return Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+}
+
+function resolveSelectedCartItems(currentCart, selectedCartItems) {
+  const liveCartItems = Array.isArray(currentCart) ? currentCart : [];
+  const snapshotItems = Array.isArray(selectedCartItems) ? selectedCartItems : [];
+
+  return snapshotItems.map((snapshotItem) => {
+    const matchedLiveItem = liveCartItems.find((cartItem) => {
+      if (snapshotItem?.itemId && cartItem?.itemId) {
+        return Number(cartItem.itemId) === Number(snapshotItem.itemId);
+      }
+
+      return (
+        Number(cartItem?.variantID ?? cartItem?.productVariantId) ===
+          Number(snapshotItem?.variantID ?? snapshotItem?.productVariantId) &&
+        Number(cartItem?.quantity || 1) === Number(snapshotItem?.quantity || 1)
+      );
+    });
+
+    return matchedLiveItem ? { ...snapshotItem, ...matchedLiveItem } : snapshotItem;
+  });
+}
+
+function normalizeOrderLike(payload) {
+  const order = unwrapPayload(payload) || {};
+  const priceSummary =
+    order?.priceSummary && typeof order.priceSummary === "object" ? order.priceSummary : {};
+  const payment = order?.payment && typeof order.payment === "object" ? order.payment : {};
+
+  const orderId = order?.orderId ?? order?.id ?? order?.order?.orderId ?? order?.order?.id ?? null;
+  const orderCode =
+    order?.orderCode ?? payment?.orderCode ?? order?.order?.orderCode ?? (orderId ? String(orderId) : null);
+
+  const totalAmount = pickFirstNumber(
+    order?.totalAmount,
+    order?.subtotal,
+    priceSummary?.itemsSubtotal,
+    priceSummary?.totalAmount
+  );
+
+  return {
+    ...order,
+    orderId,
+    orderCode,
+    totalAmount,
+    finalAmount: pickFirstNumber(
+      order?.finalAmount,
+      payment?.amount,
+      priceSummary?.total,
+      priceSummary?.finalAmount,
+      totalAmount
+    ),
+    paymentMethod: order?.paymentMethod ?? payment?.method ?? null,
+    paymentStatus: order?.paymentStatus ?? payment?.status ?? null,
+    checkoutUrl: order?.checkoutUrl ?? null,
+  };
+}
+
+function normalizePaymentStatusLike(payload) {
+  const status = unwrapPayload(payload) || {};
+
+  return {
+    ...status,
+    status: status?.status ?? "PENDING",
+    amount: pickFirstNumber(status?.amount),
+    orderCode: status?.orderCode ?? null,
+  };
+}
+
+function normalizeQrLike(payload) {
+  const qr = unwrapPayload(payload) || {};
+
+  return {
+    ...qr,
+    orderCode: qr?.orderCode ?? null,
+    amountToPay: pickFirstNumber(qr?.amountToPay),
+    qrCodeUrl: qr?.qrCodeUrl ?? null,
+  };
+}
+
+function buildCheckoutPayload(checkoutValues, selectedCartItems, selectedLensProduct) {
+  const prescriptionOption = normalizePrescriptionOption(checkoutValues.prescriptionOption);
+
+  const payload = {
+    paymentMethod: checkoutValues.paymentMethod,
+    prescriptionOption,
+    shippingAddress: {
+      cityName: checkoutValues.shippingAddress.provinceName,
+      districtName: checkoutValues.shippingAddress.districtName,
+      wardName: checkoutValues.shippingAddress.wardName,
+      addressDetail: checkoutValues.shippingAddress.addressDetail,
+    },
+    phoneNumber: checkoutValues.phoneNumber,
+    receiverName: checkoutValues.receiverName,
+    note: checkoutValues.note || null,
+    items: selectedCartItems.map((item) => {
+      const normalizedItem = {
+        productVariantId: Number(item?.variantID ?? item?.productVariantId),
+        quantity: Number(item.quantity || 1),
+      };
+
+      if (prescriptionOption === "WITH_PRESCRIPTION") {
+        const itemLensProductId = normalizeLensProductId(item?.lensProductId);
+        const checkoutLensProductId = normalizeLensProductId(
+          selectedLensProduct?.id ?? checkoutValues?.lensProductId
+        );
+
+        if (itemLensProductId || checkoutLensProductId) {
+          normalizedItem.lensProductId = itemLensProductId ?? checkoutLensProductId;
+        }
+      }
+
+      return normalizedItem;
+    }),
+  };
+
+  if (prescriptionOption === "WITH_PRESCRIPTION") {
+    payload.prescription = normalizePrescriptionPayload(checkoutValues);
+  }
+
+  return payload;
+}
+
+async function refreshServerCart(dispatch) {
+  try {
+    const refreshedCart = await dispatch(fetchCart()).unwrap();
+    console.log("cart after checkout refetch", refreshedCart);
+    return refreshedCart;
+  } catch {
+    dispatch(fetchCart());
+    return null;
+  }
+}
+
+function debugCheckoutPayload(payload, currentCart) {
+  console.log("cart before checkout", currentCart);
+  console.log(
+    "checkout item mapping",
+    (payload?.items || []).map((item) => {
+      const matchedCartItem = Array.isArray(currentCart)
+        ? currentCart.find(
+            (cartItem) =>
+              Number(cartItem?.variantID ?? cartItem?.productVariantId) ===
+                Number(item?.productVariantId) &&
+              Number(cartItem?.quantity || 1) === Number(item?.quantity || 1)
+          )
+        : null;
+
+      return {
+        payloadProductVariantId: item?.productVariantId,
+        payloadLensProductId: item?.lensProductId ?? null,
+        payloadQuantity: item?.quantity,
+        cartVariantId: matchedCartItem?.variantID ?? null,
+        cartLensProductId: matchedCartItem?.lensProductId ?? null,
+        cartQuantity: matchedCartItem?.quantity ?? null,
+      };
+    })
+  );
+  console.debug("[checkout] payload before submit", payload);
+  console.log("[checkout] payload before submit", payload);
+}
+
+function hasAtLeastOneLensItem(items) {
+  return Array.isArray(items) && items.some((item) => Number(item?.lensProductId) > 0);
+}
+
+function validateCheckoutPayload(payload) {
+  if (payload?.prescriptionOption !== "WITH_PRESCRIPTION") {
+    return null;
+  }
+
+  if (!payload?.prescription) {
+    return "Đơn có đơn thuốc đang thiếu object prescription.";
+  }
+
+  if (!hasAtLeastOneLensItem(payload.items)) {
+    return "Đơn có đơn thuốc cần có ít nhất một tròng kính được chọn.";
+  };
+
+  if (payload.prescription.pd === null) {
+    return "Đơn có đơn thuốc đang thiếu PD.";
+  }
+
+  return null;
+}
+
+function calculateSelectedItemsAmount(items) {
+  if (!Array.isArray(items)) {
+    return 0;
+  }
+
+  return items.reduce(
+    (sum, item) => sum + Number(item?.variantPrice || 0) * Math.max(1, Number(item?.quantity || 1)),
+    0
   );
 }
 
-function PaymentSuccessStep() {
+function getOrderIdentity(order) {
+  return order?.orderId ?? order?.id ?? null;
+}
+
+async function hydrateOrderDetail(orderLike) {
+  const normalizedOrder = normalizeOrderLike(orderLike);
+  const orderId = getOrderIdentity(normalizedOrder);
+
+  if (!orderId) {
+    return normalizedOrder;
+  }
+
+  try {
+    const detail = await orderService.getOrderById(orderId);
+    return normalizeOrderLike({
+      ...normalizedOrder,
+      ...unwrapPayload(detail),
+    });
+  } catch {
+    return normalizeOrderLike({
+      ...normalizedOrder,
+      orderId,
+      orderCode: normalizedOrder?.orderCode ?? String(orderId),
+    });
+  }
+}
+
+function SuccessCard({ orderCode, paymentMethod, paymentStatus, totalAmount }) {
   const navigate = useNavigate();
 
   return (
@@ -77,12 +318,27 @@ function PaymentSuccessStep() {
             <CircleCheckBig className="h-10 w-10" />
           </div>
           <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
-            Thanh toán thành công
+            Bạn đã đặt hàng thành công
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-500 sm:text-base">
-            Hệ thống đã xác nhận thanh toán của bạn. Đơn hàng đang được chuyển
-            sang bước xử lý tiếp theo.
-          </p>
+
+          <div className="mt-8 space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-left text-sm text-slate-600">
+            <div className="flex items-center justify-between">
+              <span>Mã đơn hàng</span>
+              <span className="font-semibold text-slate-900">{orderCode || "--"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Phương thức</span>
+              <span className="font-semibold text-slate-900">{paymentMethod || "--"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Trạng thái thanh toán</span>
+              <span className="font-semibold text-slate-900">{paymentStatus || "UNPAID"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Tổng tiền</span>
+              <span className="font-semibold text-slate-900">{formatCurrency(totalAmount)}</span>
+            </div>
+          </div>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <button
@@ -106,128 +362,46 @@ function PaymentSuccessStep() {
   );
 }
 
-function PaymentQrStep() {
+function BankTransferCard({ order, qrData, paymentStatus, loading, error }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const dispatch = useDispatch();
-  const { cart } = useSelector((state) => state.cart);
-  const user = useSelector((state) => state.auth.user);
-  const [paymentStatus, setPaymentStatus] = useState("idle");
-  const hasProcessedSuccessfulPayment = useRef(false);
-  const hasSavedSuccessfulOrder = useRef(false);
 
-  const storedCheckoutData = useMemo(() => {
-    try {
-      const raw = sessionStorage.getItem(CHECKOUT_LENS_SELECTION_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  }, []);
-
-  const checkoutValues =
-    location.state?.checkoutValues || storedCheckoutData.checkoutValues || {};
-  const selectedLensProduct =
-    location.state?.selectedLensProduct ||
-    storedCheckoutData.selectedLensProduct ||
-    null;
-  const selectedCartItems =
-    location.state?.selectedCartItems || storedCheckoutData.selectedCartItems || [];
-
-  const lensPrice =
-    checkoutValues?.prescriptionOption === "with_prescription"
-      ? Number(selectedLensProduct?.price || 0)
-      : 0;
-  const selectedTotalPrice = selectedCartItems.reduce(
-    (total, item) => total + item.variantPrice * item.quantity,
-    0
-  );
-  const subtotal = selectedTotalPrice + lensPrice;
-  const totalAmount = subtotal + SHIPPING_COST;
-  const firstProduct = selectedCartItems[0];
-
-  const paymentCode = useMemo(
-    () => `EC-${String(totalAmount).slice(0, 4)}-${selectedCartItems.length || 1}QR`,
-    [selectedCartItems.length, totalAmount]
-  );
-
-  useEffect(() => {
-    if (paymentStatus !== "checking") return undefined;
-
-    const timer = window.setTimeout(() => {
-      setPaymentStatus("success");
-    }, 2200);
-
-    return () => window.clearTimeout(timer);
-  }, [paymentStatus]);
-
-  useEffect(() => {
-    if (paymentStatus !== "success" || hasProcessedSuccessfulPayment.current) {
-      return;
-    }
-
-    hasProcessedSuccessfulPayment.current = true;
-
-    selectedCartItems.forEach((item) => {
-      dispatch(
-        decreaseVariantStock({
-          productId: item.productID,
-          variantId: item.variantID,
-          amount: item.quantity,
-        })
-      );
-    });
-
-    sessionStorage.removeItem(CHECKOUT_LENS_SELECTION_STORAGE_KEY);
-    appToast.success("Thanh toán thành công");
-    dispatch(removeSelectedItems(selectedCartItems.map((item) => item.variantID)));
-  }, [dispatch, paymentStatus, selectedCartItems]);
-
-  useEffect(() => {
-    if (paymentStatus !== "success" || hasSavedSuccessfulOrder.current || !user?.id) {
-      return;
-    }
-
-    hasSavedSuccessfulOrder.current = true;
-
-    appendStoredOrder(
-      user.id,
-      createStoredOrder({
-        userId: user.id,
-        user,
-        checkoutValues,
-        selectedCartItems,
-        selectedLensProduct,
-        lensPrice,
-        shippingCost: SHIPPING_COST,
-        totalAmount,
-      })
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto flex max-w-3xl items-center justify-center rounded-[28px] border border-slate-200 bg-white p-10 shadow-sm">
+          <Spin size="large" />
+        </div>
+      </main>
     );
-  }, [
-    checkoutValues,
-    lensPrice,
-    paymentStatus,
-    selectedCartItems,
-    selectedLensProduct,
-    totalAmount,
-    user?.id,
-  ]);
-
-  async function handleCopyCode() {
-    try {
-      await navigator.clipboard.writeText(paymentCode);
-    } catch {
-      // no-op
-    }
   }
 
-  function handleConfirmPayment() {
-    if (paymentStatus === "checking") return;
-    setPaymentStatus("checking");
+  if (error) {
+    return (
+      <main className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto max-w-3xl rounded-[28px] border border-rose-200 bg-rose-50 p-8 text-center text-rose-700 shadow-sm">
+          <h1 className="text-2xl font-bold">Không tải được mã thanh toán</h1>
+          <p className="mt-3 text-sm leading-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => navigate("/user/orders")}
+            className="mt-6 rounded-2xl bg-slate-900 px-5 py-3 font-semibold text-white"
+          >
+            Xem đơn hàng của tôi
+          </button>
+        </div>
+      </main>
+    );
   }
 
-  if (paymentStatus === "success") {
-    return <PaymentSuccessStep />;
+  if (paymentStatus?.status === "PAID") {
+    return (
+      <SuccessCard
+        orderCode={order?.orderCode}
+        paymentMethod="BANK_TRANSFER"
+        paymentStatus={paymentStatus?.status}
+        totalAmount={order?.finalAmount || order?.totalAmount || qrData?.amountToPay}
+      />
+    );
   }
 
   return (
@@ -238,12 +412,9 @@ function PaymentQrStep() {
             <ShieldCheck className="h-4 w-4" />
             Thanh toán an toàn
           </div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Thanh toán bằng mã QR
-          </h1>
+          <h1 className="text-3xl font-bold text-foreground">Thanh toán chuyển khoản</h1>
           <p className="text-sm text-muted-foreground">
-            Quét mã để hoàn tất thanh toán. Sau đó bấm xác nhận để hệ thống kiểm
-            tra giao dịch.
+            Quét mã QR bên dưới để thanh toán. Hệ thống sẽ tự kiểm tra trạng thái từ backend.
           </p>
         </div>
 
@@ -253,164 +424,431 @@ function PaymentQrStep() {
               <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
                 <QrCode className="h-6 w-6" />
               </div>
-              <h2 className="text-xl font-semibold text-slate-900">
-                Quét mã để thanh toán
-              </h2>
+              <h2 className="text-xl font-semibold text-slate-900">Quét mã để thanh toán</h2>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
-                Bạn có thể dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã QR
-                bên dưới.
+                Chỉ coi là thanh toán thành công khi backend trả về trạng thái PAID.
               </p>
 
-              <div className="mt-6">
-                <FakeQrCode />
-              </div>
-
-              <div className="mt-5 rounded-3xl border border-sky-100 bg-white/90 px-5 py-4 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">
-                  Giá thành khách phải trả
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                  {formatCurrency(totalAmount)}
-                </p>
-              </div>
-
-              <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-                  Mã thanh toán:{" "}
-                  <span className="font-semibold text-slate-900">{paymentCode}</span>
+              {qrData?.qrCodeUrl ? (
+                <img
+                  src={qrData.qrCodeUrl}
+                  alt={`QR thanh toán cho đơn ${qrData.orderCode || order?.orderCode || ""}`}
+                  className="mx-auto mt-6 w-[220px] rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm"
+                />
+              ) : (
+                <div className="mx-auto mt-6 rounded-[24px] border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+                  QR chưa sẵn sàng.
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  <Copy className="h-4 w-4" />
-                  Sao chép mã
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-4 text-sm leading-6 text-slate-600">
-              Đơn hàng mẫu:{" "}
-              <span className="font-semibold text-slate-900">
-                {firstProduct
-                  ? `${firstProduct.name} (${firstProduct.gender === "Male" ? "Nam" : "Nữ"})`
-                  : "Chưa có sản phẩm"}
-              </span>
-              . Sau khi bạn xác nhận, hệ thống sẽ kiểm tra xem giao dịch đã được
-              ghi nhận hay chưa.
+              )}
             </div>
           </div>
 
           <div className="h-fit rounded-[24px] border border-slate-900 bg-white p-6 shadow-sm">
-            <h2 className="text-[30px] font-semibold text-slate-900">
-              Tóm tắt đơn hàng
-            </h2>
-
-            <div className="mt-5 space-y-4">
-              {selectedCartItems.map((item) => (
-                <div
-                  key={item.variantID}
-                  className="flex items-start justify-between gap-4"
-                >
-                  <div>
-                    <p className="text-lg font-medium text-slate-900">
-                      {item.name} ({item.gender === "Male" ? "Nam" : "Nữ"})
-                    </p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      Số lượng: {item.quantity}
-                    </p>
-                  </div>
-                  <p className="text-lg font-medium text-slate-900">
-                    {formatCurrency(item.variantPrice * item.quantity)}
-                  </p>
-                </div>
-              ))}
-
-              {checkoutValues?.prescriptionOption === "with_prescription" &&
-              selectedLensProduct ? (
-                <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">
-                        {selectedLensProduct.name}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">
-                        {selectedLensProduct.description}
-                      </p>
-                    </div>
-                    <p className="text-lg font-medium text-slate-900">
-                      {formatCurrency(lensPrice)}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="my-7 border-t border-slate-900" />
-
-            <div className="space-y-4 text-lg">
-              <div className="flex items-center justify-between text-slate-800">
-                <span>Tạm tính</span>
-                <span>{formatCurrency(selectedTotalPrice)}</span>
-              </div>
-
-              {checkoutValues?.prescriptionOption === "with_prescription" &&
-              selectedLensProduct ? (
-                <div className="flex items-center justify-between text-slate-800">
-                  <span>Tròng kính</span>
-                  <span>{formatCurrency(lensPrice)}</span>
-                </div>
-              ) : null}
-
-              <div className="flex items-center justify-between text-slate-800">
-                <span>Phí vận chuyển</span>
-                <span>{formatCurrency(SHIPPING_COST)}</span>
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-slate-900 pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-2xl font-semibold text-slate-900">
-                  Tổng cộng
-                </span>
-                <span className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                  {formatCurrency(totalAmount)}
+            <h2 className="text-[30px] font-semibold text-slate-900">Thông tin thanh toán</h2>
+            <div className="mt-5 space-y-4 text-sm text-slate-600">
+              <div className="flex items-center justify-between">
+                <span>Mã đơn</span>
+                <span className="font-semibold text-slate-900">
+                  {qrData?.orderCode || order?.orderCode || "--"}
                 </span>
               </div>
-            </div>
-
-            <div className="mt-10">
-              <button
-                type="button"
-                onClick={handleConfirmPayment}
-                disabled={paymentStatus === "checking"}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-teal-600 px-5 py-3.5 text-base font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-teal-400"
-              >
-                {paymentStatus === "checking" ? (
-                  <>
-                    <LoaderCircle className="h-5 w-5 animate-spin" />
-                    Đang xác nhận thanh toán...
-                  </>
-                ) : (
-                  "Tôi đã thanh toán"
-                )}
-              </button>
+              <div className="flex items-center justify-between">
+                <span>Ngân hàng</span>
+                <span className="font-semibold text-slate-900">{qrData?.bankName || "--"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Số tài khoản</span>
+                <span className="font-semibold text-slate-900">
+                  {qrData?.bankAccountNumber || "--"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Chủ tài khoản</span>
+                <span className="font-semibold text-slate-900">
+                  {qrData?.bankAccountName || "--"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Nội dung CK</span>
+                <span className="font-semibold text-slate-900">
+                  {qrData?.transferContent || "--"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Số tiền</span>
+                <span className="font-semibold text-slate-900">
+                  {formatCurrency(qrData?.amountToPay || order?.finalAmount || order?.totalAmount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Trạng thái</span>
+                <span className="font-semibold text-amber-600">
+                  {paymentStatus?.status || "PENDING"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={() => navigate("/user/cart/payment")}
+          onClick={() => navigate("/user/orders")}
           className="mt-5 inline-flex items-center gap-2 rounded-2xl hover:underline"
         >
           <ArrowBigLeft className="h-5 w-5" />
-          <span>Quay lại thông tin giao hàng</span>
+          <span>Về danh sách đơn hàng</span>
         </button>
       </div>
     </main>
   );
+}
+
+function PayosPendingCard({ order, error }) {
+  const navigate = useNavigate();
+
+  return (
+    <main className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-3xl rounded-[28px] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Đang chờ PayOS</h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-500 sm:text-base">
+          {error || "Backend chưa trả về checkoutUrl hoặc bạn vừa quay lại từ cổng thanh toán."}
+        </p>
+        <div className="mt-8 space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-left text-sm text-slate-600">
+          <div className="flex items-center justify-between">
+            <span>Mã đơn hàng</span>
+            <span className="font-semibold text-slate-900">{order?.orderCode || "--"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Phương thức</span>
+            <span className="font-semibold text-slate-900">PAYOS</span>
+          </div>
+        </div>
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => navigate("/user/orders")}
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Theo dõi đơn hàng
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/products")}
+            className="rounded-2xl bg-teal-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-teal-700"
+          >
+            Mua thêm sản phẩm
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function CheckoutProcessStep() {
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const currentCart = useSelector((state) => state.cart.cart);
+  const [searchParams] = useSearchParams();
+  const submittedRef = useRef(false);
+
+  const orderIdFromQuery = searchParams.get("orderId");
+  const checkoutValues = location.state?.checkoutValues;
+  const selectedLensProduct = location.state?.selectedLensProduct || null;
+  const selectedCartItems = location.state?.selectedCartItems || [];
+  const resolvedSelectedCartItems = useMemo(
+    () => resolveSelectedCartItems(currentCart, selectedCartItems),
+    [currentCart, selectedCartItems]
+  );
+  const selectedPaymentMethod =
+    checkoutValues?.paymentMethod || searchParams.get("paymentMethod") || "COD";
+
+  const [order, setOrder] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [qrData, setQrData] = useState(null);
+  const [checkoutSnapshot, setCheckoutSnapshot] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function bootstrapExistingOrder(orderId) {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [orderDetail, status] = await Promise.all([
+          orderService.getOrderById(orderId),
+          paymentService.getOrderStatus(orderId),
+        ]);
+
+        if (!mounted) {
+          return;
+        }
+
+        setOrder(normalizeOrderLike(orderDetail));
+        setPaymentStatus(normalizePaymentStatusLike(status));
+
+        const normalizedOrder = normalizeOrderLike(orderDetail);
+        const paymentMethod = normalizedOrder?.paymentMethod || selectedPaymentMethod;
+        await refreshServerCart(dispatch);
+
+        if (paymentMethod === "BANK_TRANSFER" && normalizePaymentStatusLike(status)?.status !== "PAID") {
+          try {
+            const qr = await paymentService.getOrderQr(orderId);
+
+            if (mounted) {
+              setQrData(normalizeQrLike(qr));
+            }
+          } catch (nextError) {
+            if (mounted) {
+              setError(getApiErrorMessage(nextError, "Không tải được mã QR chuyển khoản."));
+            }
+          }
+        }
+      } catch (nextError) {
+        if (mounted) {
+          setError(getApiErrorMessage(nextError, "Không tải được đơn hàng thanh toán."));
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    async function submitCheckout() {
+      if (!checkoutValues || !resolvedSelectedCartItems.length || submittedRef.current) {
+        return;
+      }
+
+      submittedRef.current = true;
+      setLoading(true);
+      setError("");
+
+      try {
+        const payload = buildCheckoutPayload(
+          checkoutValues,
+          resolvedSelectedCartItems,
+          selectedLensProduct
+        );
+        const payloadError = validateCheckoutPayload(payload);
+
+        if (payloadError) {
+          throw new Error(payloadError);
+        }
+
+        debugCheckoutPayload(payload, currentCart);
+        const response = await orderService.checkout(payload);
+        const normalizedResponse = normalizeOrderLike(response);
+        const snapshotAmount =
+          normalizedResponse?.finalAmount ||
+          calculateSelectedItemsAmount(resolvedSelectedCartItems) +
+            Number(normalizedResponse?.shippingFee || 0) -
+            Number(normalizedResponse?.discountAmount || 0);
+        setCheckoutSnapshot({
+          orderId: normalizedResponse?.orderId ?? null,
+          orderCode: normalizedResponse?.orderCode ?? null,
+          finalAmount: snapshotAmount,
+          paymentMethod: normalizedResponse?.paymentMethod || selectedPaymentMethod,
+          paymentStatus: normalizedResponse?.paymentStatus || "UNPAID",
+        });
+        const hydratedOrder = await hydrateOrderDetail(response);
+
+        if (!mounted) {
+          return;
+        }
+
+        setOrder(hydratedOrder);
+        await refreshServerCart(dispatch);
+        dispatch(fetchProducts());
+
+        const paymentMethod =
+          hydratedOrder?.paymentMethod || normalizedResponse?.paymentMethod || selectedPaymentMethod;
+
+        if (paymentMethod === "COD") {
+          setPaymentStatus({
+            ...normalizePaymentStatusLike(response),
+            status: hydratedOrder?.paymentStatus || normalizedResponse?.paymentStatus || "UNPAID",
+          });
+          return;
+        }
+
+        if (paymentMethod === "BANK_TRANSFER") {
+          try {
+            const qr = await paymentService.getOrderQr(getOrderIdentity(hydratedOrder));
+
+            if (mounted) {
+              setQrData(normalizeQrLike(qr));
+            }
+          } catch (nextError) {
+            if (mounted) {
+              setError(getApiErrorMessage(nextError, "Không tải được mã QR chuyển khoản."));
+            }
+          }
+
+          try {
+            const status = await paymentService.getOrderStatus(getOrderIdentity(hydratedOrder));
+
+            if (mounted) {
+              setPaymentStatus(normalizePaymentStatusLike(status));
+            }
+          } catch {
+            if (mounted) {
+              setPaymentStatus({ status: "PENDING" });
+            }
+          }
+
+          return;
+        }
+
+        if (paymentMethod === "PAYOS") {
+          if (hydratedOrder?.checkoutUrl || normalizedResponse?.checkoutUrl) {
+            window.location.href = hydratedOrder?.checkoutUrl || normalizedResponse?.checkoutUrl;
+            return;
+          }
+
+          try {
+            const status = await paymentService.getOrderStatus(getOrderIdentity(hydratedOrder));
+
+            if (mounted) {
+              setPaymentStatus(normalizePaymentStatusLike(status));
+            }
+          } catch {
+            if (mounted) {
+              setPaymentStatus({
+                ...normalizePaymentStatusLike(response),
+                status: normalizedResponse?.paymentStatus || "PENDING",
+              });
+            }
+          }
+        }
+      } catch (nextError) {
+        if (mounted) {
+          setError(getApiErrorMessage(nextError, "Không thể tạo đơn hàng từ backend."));
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (orderIdFromQuery) {
+      bootstrapExistingOrder(orderIdFromQuery);
+    } else {
+      submitCheckout();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    checkoutValues,
+    dispatch,
+    currentCart,
+    orderIdFromQuery,
+    resolvedSelectedCartItems,
+    selectedLensProduct,
+    selectedPaymentMethod,
+  ]);
+
+  useEffect(() => {
+    const paymentMethod = order?.paymentMethod || selectedPaymentMethod;
+
+    if (!order?.orderId || paymentMethod !== "BANK_TRANSFER") {
+      return undefined;
+    }
+
+    if (paymentStatus?.status === "PAID") {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const status = await paymentService.getOrderStatus(order.orderId);
+        setPaymentStatus(normalizePaymentStatusLike(status));
+      } catch {
+        // keep last state
+      }
+    }, 8000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [order?.orderId, order?.paymentMethod, paymentStatus?.status, selectedPaymentMethod]);
+
+  if (!checkoutValues && !orderIdFromQuery && !loading && !order) {
+    return (
+      <main className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto max-w-3xl rounded-[28px] border border-amber-200 bg-amber-50 p-8 text-center text-amber-800 shadow-sm">
+          <h1 className="text-2xl font-bold">Thiếu thông tin checkout</h1>
+          <p className="mt-3 text-sm leading-6">
+            Vui lòng quay lại giỏ hàng và thực hiện thanh toán lại.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const displayedOrderCode =
+    order?.orderCode || paymentStatus?.orderCode || qrData?.orderCode || checkoutSnapshot?.orderCode;
+  const displayedAmount =
+    paymentStatus?.amount ||
+    qrData?.amountToPay ||
+    order?.finalAmount ||
+    checkoutSnapshot?.finalAmount ||
+    calculateSelectedItemsAmount(resolvedSelectedCartItems);
+  const displayedPaymentStatus =
+    paymentStatus?.status || order?.paymentStatus || checkoutSnapshot?.paymentStatus || "UNPAID";
+  const displayedPaymentMethod =
+    order?.paymentMethod || checkoutSnapshot?.paymentMethod || selectedPaymentMethod;
+
+  if (selectedPaymentMethod === "COD" && loading && !displayedOrderCode && !displayedAmount) {
+    return (
+      <main className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto flex max-w-3xl items-center justify-center rounded-[28px] border border-slate-200 bg-white p-10 shadow-sm">
+          <Spin size="large" />
+        </div>
+      </main>
+    );
+  }
+
+  if (selectedPaymentMethod === "COD") {
+    return (
+      <SuccessCard
+        orderCode={displayedOrderCode}
+        paymentMethod={displayedPaymentMethod}
+        paymentStatus={displayedPaymentStatus}
+        totalAmount={displayedAmount}
+      />
+    );
+  }
+
+  if (selectedPaymentMethod === "BANK_TRANSFER") {
+    return (
+      <BankTransferCard
+        order={order}
+        qrData={qrData}
+        paymentStatus={paymentStatus}
+        loading={loading}
+        error={error}
+      />
+    );
+  }
+
+  if (selectedPaymentMethod === "PAYOS" && paymentStatus?.status === "PAID") {
+    return (
+      <SuccessCard
+        orderCode={order?.orderCode}
+        paymentMethod="PAYOS"
+        paymentStatus={paymentStatus?.status}
+        totalAmount={paymentStatus?.amount || order?.finalAmount}
+      />
+    );
+  }
+
+  return <PayosPendingCard order={order} error={error} />;
 }
 
 export default function CheckoutPage() {
@@ -427,12 +865,12 @@ export default function CheckoutPage() {
       setLensLoading(true);
 
       try {
-        const response = await api.get("/lens-products");
-        const normalizedLensProducts = Array.isArray(response.data)
-          ? response.data.filter((item) => item?.isActive !== 0 && item?.is_active !== 0)
+        const response = await productService.getLensProducts();
+        const normalizedLensProducts = Array.isArray(response)
+          ? response.filter((item) => item?.isActive !== 0 && item?.is_active !== 0)
           : [];
 
-        if (isMounted && normalizedLensProducts.length) {
+        if (isMounted) {
           setLensProducts(normalizedLensProducts);
         }
       } catch {
@@ -453,17 +891,15 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  if (paymentStep === "qr") {
-    return <PaymentQrStep />;
+  if (paymentStep === "process" || paymentStep === "result") {
+    return <CheckoutProcessStep />;
   }
 
   return (
     <main className="min-h-screen bg-background px-4 py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-12">
-          <h1 className="mb-2 text-4xl font-bold text-foreground font-mono">
-            Thanh toán
-          </h1>
+          <h1 className="mb-2 font-mono text-4xl font-bold text-foreground">Thanh toán</h1>
           <p className="text-muted-foreground">
             Hoàn tất đơn hàng bằng cách điền thông tin giao hàng
           </p>
@@ -476,11 +912,7 @@ export default function CheckoutPage() {
                 Thông tin giao hàng
               </h2>
 
-              <CheckOutForm
-                form={form}
-                lensProducts={lensProducts}
-                lensLoading={lensLoading}
-              />
+              <CheckOutForm form={form} lensProducts={lensProducts} lensLoading={lensLoading} />
             </div>
           </div>
 
@@ -495,10 +927,7 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        <NavLink
-          className="mt-5 flex items-center gap-2 rounded-2xl hover:underline"
-          to="/user/cart"
-        >
+        <NavLink className="mt-5 flex items-center gap-2 rounded-2xl hover:underline" to="/user/cart">
           <ArrowBigLeft className="h-5 w-5" />
           <span>Quay về giỏ hàng</span>
         </NavLink>

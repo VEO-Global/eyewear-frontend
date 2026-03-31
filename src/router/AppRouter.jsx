@@ -29,6 +29,9 @@ import StaffOperationsHandoffPage from "../pages/staff/StaffOperationsHandoffPag
 import StaffAfterSalesPage from "../pages/staff/StaffAfterSalesPage";
 import { Header } from "../components/common/Header";
 import { Footer } from "../components/common/Footer";
+import { OperationsWorkspaceLayout } from "../features/operations/components/OperationsWorkspaceLayout";
+import OperationsDashboardPage from "../features/operations/pages/OperationsDashboardPage";
+import OperationsOrdersPage from "../features/operations/pages/OperationsOrdersPage";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -107,6 +110,24 @@ function AnimatedRoutes() {
               element={<StaffOperationsHandoffPage />}
             />
             <Route path="/staff/after-sales" element={<StaffAfterSalesPage />} />
+            <Route path="/operation" element={<OperationsWorkspaceLayout />}>
+              <Route
+                index
+                element={
+                  <PageWrapper>
+                    <OperationsDashboardPage />
+                  </PageWrapper>
+                }
+              />
+              <Route
+                path="orders"
+                element={
+                  <PageWrapper>
+                    <OperationsOrdersPage />
+                  </PageWrapper>
+                }
+              />
+            </Route>
 
             {/* Admin Route */}
             <Route path="/admin/dashboard" element={<AdminDashBoard />}></Route>

@@ -1,8 +1,10 @@
-/* eslint-disable no-unused-vars */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "../../configs/config-axios";
+import { authService } from "../../services/authService";
+import { profileService } from "../../services/profileService";
+import { clearAccessToken, getAccessToken, setAccessToken } from "../../services/api";
+import { getApiErrorMessage, mapValidationErrors } from "../../utils/apiError";
+import { normalizeRoleName } from "../../utils/authRole";
 
-const PROFILE_ADDRESS_STORAGE_KEY = "profile-address-by-user";
 const FALLBACK_AUTH_ERROR_MESSAGE = "Đăng nhập thất bại. Vui lòng thử lại.";
 
 const initialState = {
@@ -12,33 +14,8 @@ const initialState = {
   error: null,
   notificationMessage: null,
   notificationType: null,
+  validationErrors: {},
 };
-
-function getErrorMessage(error, fallbackMessage) {
-  const responseData = error.response?.data;
-
-  if (typeof responseData === "string" && responseData.trim()) {
-    return responseData;
-  }
-
-  if (typeof responseData?.message === "string" && responseData.message.trim()) {
-    return responseData.message;
-  }
-
-  if (Array.isArray(responseData?.errors) && responseData.errors.length > 0) {
-    const firstError = responseData.errors[0];
-
-    if (typeof firstError === "string" && firstError.trim()) {
-      return firstError;
-    }
-
-    if (typeof firstError?.message === "string" && firstError.message.trim()) {
-      return firstError.message;
-    }
-  }
-
-  return fallbackMessage;
-}
 
 function decodeJwtPayload(token) {
   if (!token || typeof token !== "string") {
@@ -57,51 +34,15 @@ function decodeJwtPayload(token) {
       normalizedPayload.length + ((4 - (normalizedPayload.length % 4)) % 4),
       "="
     );
-    const decodedPayload = atob(paddedPayload);
 
-    return JSON.parse(decodedPayload);
+    return JSON.parse(atob(paddedPayload));
   } catch {
     return null;
   }
 }
 
-function buildSessionUserFromToken(token) {
-  const payload = decodeJwtPayload(token);
-
-  if (!payload) {
-    return null;
-  }
-
-  const email = payload.sub ?? null;
-  const emailName = typeof email === "string" ? email.split("@")[0] : "";
-  const normalizedDisplayName = emailName
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-
-  return {
-    id:
-      payload.id ??
-      payload.userId ??
-      payload.user_id ??
-      payload.nameid ??
-      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ??
-      null,
-    email,
-    role: payload.role ?? null,
-    fullName: normalizedDisplayName || email || "Tài khoản",
-    phone: null,
-    isActive: null,
-  };
-}
-
 function normalizeIsActive(user) {
-  if (!user || typeof user !== "object") {
-    return null;
-  }
-
-  const candidateValues = [user.isActive, user.is_active, user.active];
+  const candidateValues = [user?.isActive, user?.is_active, user?.active];
 
   for (const value of candidateValues) {
     if (typeof value === "boolean") {
@@ -122,8 +63,14 @@ function normalizeIsActive(user) {
 
 function normalizeUserProfile(user) {
   if (!user || typeof user !== "object") {
-    return user;
+    return null;
   }
+
+  const cityName = user.city ?? user.cityName ?? user.province ?? user.provinceName ?? "";
+  const districtName = user.district ?? user.districtName ?? "";
+  const wardName = user.ward ?? user.wardName ?? "";
+  const addressDetail =
+    user.addressDetail ?? user.address_detail ?? user.address ?? user.addressLine ?? "";
 
   return {
     ...user,
@@ -131,11 +78,61 @@ function normalizeUserProfile(user) {
     fullName: user.fullName ?? user.full_name ?? user.name ?? "",
     email: user.email ?? user.username ?? "",
     phone: user.phone ?? user.phoneNumber ?? user.phone_number ?? "",
+    address: user.address ?? user.addressLine ?? addressDetail,
+    addressLine: user.addressLine ?? addressDetail,
+    addressDetail,
+    city: cityName,
+    cityName,
+    province: cityName,
+    provinceName: cityName,
+    district: districtName,
+    districtName,
+    ward: wardName,
+    wardName,
+    latestShippingAddress:
+      cityName || districtName || wardName || addressDetail
+        ? {
+            provinceName: cityName,
+            districtName,
+            wardName,
+            addressDetail,
+          }
+        : null,
     isActive: normalizeIsActive(user),
+    role: normalizeRoleName(user.role ?? user.roleName ?? user.authority ?? user.userRole),
   };
 }
 
-function extractTokenFromLoginResponse(data) {
+function buildSessionUserFromToken(token) {
+  const payload = decodeJwtPayload(token);
+
+  if (!payload) {
+    return null;
+  }
+
+  const email = payload.sub ?? null;
+  const emailName = typeof email === "string" ? email.split("@")[0] : "";
+  const displayName = emailName
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  return {
+    id:
+      payload.id ??
+      payload.userId ??
+      payload.user_id ??
+      payload.nameid ??
+      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ??
+      null,
+    email,
+    role: normalizeRoleName(payload.role ?? payload.authority ?? payload.userRole),
+    fullName: displayName || email || "Tài khoản",
+  };
+}
+
+function extractToken(data) {
   if (!data) {
     return null;
   }
@@ -144,252 +141,124 @@ function extractTokenFromLoginResponse(data) {
     return data;
   }
 
-  if (typeof data.token === "string" && data.token.trim()) {
-    return data.token;
-  }
-
-  if (typeof data.accessToken === "string" && data.accessToken.trim()) {
-    return data.accessToken;
-  }
-
-  if (typeof data.jwt === "string" && data.jwt.trim()) {
-    return data.jwt;
-  }
-
-  return null;
+  return data.token || data.accessToken || data.jwt || null;
 }
-
-function readStoredProfileAddresses() {
-  try {
-    const storedValue = localStorage.getItem(PROFILE_ADDRESS_STORAGE_KEY);
-
-    if (!storedValue) {
-      return {};
-    }
-
-    const parsedValue = JSON.parse(storedValue);
-    return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredProfileAddresses(addressMap) {
-  try {
-    localStorage.setItem(PROFILE_ADDRESS_STORAGE_KEY, JSON.stringify(addressMap));
-  } catch {
-    // ignore storage failures
-  }
-}
-
-function persistStructuredAddress(userId, payload) {
-  if (!userId || !payload || typeof payload !== "object") {
-    return;
-  }
-
-  const hasStructuredAddress =
-    payload.provinceName || payload.districtName || payload.wardName || payload.addressDetail;
-
-  if (!hasStructuredAddress) {
-    return;
-  }
-
-  const currentAddressMap = readStoredProfileAddresses();
-  currentAddressMap[String(userId)] = {
-    provinceCode: payload.provinceCode,
-    provinceName: payload.provinceName,
-    districtCode: payload.districtCode,
-    districtName: payload.districtName,
-    wardCode: payload.wardCode,
-    wardName: payload.wardName,
-    addressDetail: payload.addressDetail,
-    isLatest: true,
-    updatedAt: new Date().toISOString(),
-  };
-  writeStoredProfileAddresses(currentAddressMap);
-}
-
-function mergeStoredAddress(profile) {
-  const normalizedProfile = normalizeUserProfile(profile);
-
-  if (!normalizedProfile?.id) {
-    return normalizedProfile;
-  }
-
-  const currentAddressMap = readStoredProfileAddresses();
-  const storedAddress = currentAddressMap[String(normalizedProfile.id)];
-
-  if (!storedAddress) {
-    return normalizedProfile;
-  }
-
-  return {
-    ...normalizedProfile,
-    addressDetail: normalizedProfile.addressDetail ?? storedAddress.addressDetail,
-    province: normalizedProfile.province ?? storedAddress.provinceName,
-    district: normalizedProfile.district ?? storedAddress.districtName,
-    ward: normalizedProfile.ward ?? storedAddress.wardName,
-    latestShippingAddress: normalizedProfile.latestShippingAddress || storedAddress,
-  };
-}
-
-async function persistProfileUpdate(id, payload) {
-  const requests = [
-    () => api.put("/user/profile", payload),
-    () => api.patch("/user/profile", payload),
-    () => api.put(`/users/${id}`, payload),
-    () => api.patch(`/users/${id}`, payload),
-  ];
-
-  let lastError;
-
-  for (const request of requests) {
-    try {
-      await request();
-      const refreshedProfile = await api.get("/user/profile");
-      return normalizeUserProfile(refreshedProfile.data);
-    } catch (error) {
-      lastError = error;
-
-      if (![404, 405].includes(error.response?.status)) {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError;
-}
-
-function mergeSubmittedAddress(profile, payload) {
-  const normalizedProfile = normalizeUserProfile(profile);
-
-  if (!payload || typeof payload !== "object") {
-    return normalizedProfile;
-  }
-
-  const hasStructuredAddress =
-    payload.provinceName || payload.districtName || payload.wardName || payload.addressDetail;
-
-  if (!hasStructuredAddress) {
-    return {
-      ...normalizedProfile,
-      address: payload.address ?? normalizedProfile?.address,
-    };
-  }
-
-  return {
-    ...normalizedProfile,
-    address: payload.address ?? normalizedProfile?.address,
-    addressDetail: payload.addressDetail ?? normalizedProfile?.addressDetail,
-    province: payload.provinceName ?? normalizedProfile?.province,
-    district: payload.districtName ?? normalizedProfile?.district,
-    ward: payload.wardName ?? normalizedProfile?.ward,
-    latestShippingAddress: {
-      provinceCode: payload.provinceCode,
-      provinceName: payload.provinceName,
-      districtCode: payload.districtCode,
-      districtName: payload.districtName,
-      wardCode: payload.wardCode,
-      wardName: payload.wardName,
-      addressDetail: payload.addressDetail,
-      isLatest: true,
-      updatedAt: new Date().toISOString(),
-    },
-  };
-}
-
-
-
 
 export const loginUser = createAsyncThunk("auth/login", async (values, { rejectWithValue }) => {
   try {
-    const payload = {
+    const response = await authService.login({
       email: values?.email ?? "",
       password: values?.password ?? "",
-    };
-    const response = await api.post("/auth/login", payload);
-    const token = extractTokenFromLoginResponse(response.data);
+    });
+    const token = extractToken(response);
 
     if (!token) {
-      return rejectWithValue("Đăng nhập thất bại do frontend không đọc được token từ response.");
+      return rejectWithValue("Đăng nhập thất bại do không đọc được token từ backend.");
     }
+
+    setAccessToken(token);
 
     return {
       token,
+      message: response?.message || "Đăng nhập thành công",
       sessionUser: buildSessionUserFromToken(token),
     };
   } catch (error) {
-    if (error.response?.status === 500) {
-      return rejectWithValue("Sai email hoặc mật khẩu. Vui lòng thử lại.");
-    }
-
-    return rejectWithValue(getErrorMessage(error, FALLBACK_AUTH_ERROR_MESSAGE));
+    return rejectWithValue(getApiErrorMessage(error, FALLBACK_AUTH_ERROR_MESSAGE));
   }
 });
 
-export const registerUser = createAsyncThunk("/auth/register", async (values, { rejectWithValue }) => {
-  try {
-    const response = await api.post("auth/register", values);
-    return response.data;
-  } catch (error) {
-    return rejectWithValue(getErrorMessage(error, "Đăng ký thất bại. Vui lòng thử lại."));
-  }
-});
-
-export const fetchProfile = createAsyncThunk("/user/profile", async (_, { rejectWithValue }) => {
-  try {
-    const response = await api.get("/user/profile");
-    return normalizeUserProfile(response.data);
-  } catch (error) {
-    if (error.response?.status === 403) {
-      return rejectWithValue({
-        status: 403,
-        message: "Không có quyền truy cập thông tin hồ sơ với vai trò hiện tại.",
-      });
-    }
-
-    return rejectWithValue(getErrorMessage(error, "Không thể lấy thông tin người dùng."));
-  }
-});
-
-export const updateProfile = createAsyncThunk(
-  "auth/updateProfile",
-  async ({ id, data }, { rejectWithValue }) => {
+export const registerUser = createAsyncThunk(
+  "auth/register",
+  async (values, { rejectWithValue }) => {
     try {
-      const payload = {
-        fullName: data.fullName,
-        full_name: data.fullName,
-        phone: data.phone,
-        phone_number: data.phone,
-        address: data.address,
-        addressDetail: data.addressDetail,
-        address_detail: data.addressDetail,
-        provinceCode: data.provinceCode,
-        provinceName: data.provinceName,
-        province_name: data.provinceName,
-        districtCode: data.districtCode,
-        districtName: data.districtName,
-        district_name: data.districtName,
-        wardCode: data.wardCode,
-        wardName: data.wardName,
-        ward_name: data.wardName,
-      };
-
-      const updatedProfile = await persistProfileUpdate(id, payload);
-      persistStructuredAddress(id, payload);
-      return mergeSubmittedAddress(updatedProfile, payload);
+      return await authService.register(values);
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Cập nhật thông tin thất bại. Vui lòng thử lại."));
+      return rejectWithValue({
+        message: getApiErrorMessage(error, "Đăng ký thất bại. Vui lòng thử lại."),
+        validationErrors: mapValidationErrors(error),
+      });
     }
   }
 );
+
+export const fetchProfile = createAsyncThunk(
+  "auth/fetchProfile",
+  async (_, { rejectWithValue }) => {
+    try {
+      return normalizeUserProfile(await profileService.getProfile());
+    } catch (error) {
+      return rejectWithValue({
+        status: error?.response?.status,
+        message: getApiErrorMessage(error, "Không thể lấy thông tin người dùng."),
+      });
+    }
+  }
+);
+
+export const updateProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async ({ data }, { rejectWithValue }) => {
+    try {
+      const updatedProfile = await profileService.updateProfile({
+        fullName: data.fullName,
+        phone: data.phone,
+        address: data.address,
+      });
+
+      return {
+        ...normalizeUserProfile(updatedProfile),
+        address: data.address,
+        addressLine: data.address,
+        addressDetail: data.addressDetail ?? data.address,
+        provinceCode: data.provinceCode,
+        provinceName: data.provinceName,
+        province: data.provinceName,
+        districtCode: data.districtCode,
+        districtName: data.districtName,
+        district: data.districtName,
+        wardCode: data.wardCode,
+        wardName: data.wardName,
+        ward: data.wardName,
+        latestShippingAddress: {
+          provinceCode: data.provinceCode,
+          provinceName: data.provinceName,
+          districtCode: data.districtCode,
+          districtName: data.districtName,
+          wardCode: data.wardCode,
+          wardName: data.wardName,
+          addressDetail: data.addressDetail ?? data.address,
+        },
+      };
+    } catch (error) {
+      return rejectWithValue({
+        message: getApiErrorMessage(error, "Cập nhật thông tin thất bại. Vui lòng thử lại."),
+        validationErrors: mapValidationErrors(error),
+      });
+    }
+  }
+);
+
+export const softLogout = createAsyncThunk("auth/softLogout", async (_, { rejectWithValue }) => {
+  try {
+    await authService.logout();
+  } catch (error) {
+    if (error?.response?.status && error.response.status !== 401) {
+      return rejectWithValue(getApiErrorMessage(error, "Đăng xuất thất bại."));
+    }
+  } finally {
+    clearAccessToken();
+  }
+
+  return true;
+});
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
     restoreSessionFromToken(state, action) {
-      const token = action.payload;
+      const token = action.payload || getAccessToken();
       const sessionUser = buildSessionUserFromToken(token);
 
       if (!token) {
@@ -400,10 +269,19 @@ const authSlice = createSlice({
       state.user = state.user ? { ...sessionUser, ...state.user } : sessionUser;
     },
     logout(state) {
+      clearAccessToken();
       state.user = null;
       state.isAuthenticated = false;
-      state.notificationMessage = "";
+      state.loading = false;
+      state.error = null;
+      state.notificationMessage = null;
       state.notificationType = null;
+      state.validationErrors = {};
+    },
+    clearAuthNotifications(state) {
+      state.notificationMessage = null;
+      state.notificationType = null;
+      state.validationErrors = {};
     },
   },
   extraReducers: (builder) => {
@@ -411,6 +289,7 @@ const authSlice = createSlice({
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.validationErrors = {};
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
@@ -418,10 +297,8 @@ const authSlice = createSlice({
         state.user = state.user
           ? { ...action.payload.sessionUser, ...state.user }
           : action.payload.sessionUser;
-        state.error = null;
-        state.notificationMessage = "Đăng nhập thành công";
+        state.notificationMessage = action.payload.message || "Đăng nhập thành công";
         state.notificationType = "success";
-        localStorage.setItem("token", action.payload.token);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -432,40 +309,37 @@ const authSlice = createSlice({
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.validationErrors = {};
       })
-      .addCase(registerUser.fulfilled, (state) => {
+      .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.notificationMessage = "Đăng ký thành công";
+        state.notificationMessage = action.payload?.message || "Đăng ký thành công";
         state.notificationType = "success";
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
-        state.notificationMessage = action.payload;
+        state.error = action.payload?.message || action.payload;
+        state.notificationMessage = action.payload?.message || action.payload;
         state.notificationType = "error";
+        state.validationErrors = action.payload?.validationErrors || {};
       })
       .addCase(fetchProfile.pending, (state) => {
         state.loading = true;
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = mergeStoredAddress(action.payload);
+        state.user = action.payload;
         state.isAuthenticated = true;
+        state.error = null;
       })
       .addCase(fetchProfile.rejected, (state, action) => {
         state.loading = false;
-        state.error =
-          action.payload && typeof action.payload === "object"
-            ? action.payload.message
-            : action.payload;
-
-        if (localStorage.getItem("token")) {
-          state.isAuthenticated = true;
-        }
+        state.error = action.payload?.message || action.payload;
       })
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.validationErrors = {};
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
@@ -475,12 +349,15 @@ const authSlice = createSlice({
       })
       .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
-        state.notificationMessage = action.payload;
+        state.error = action.payload?.message || action.payload;
+        state.notificationMessage = action.payload?.message || action.payload;
         state.notificationType = "error";
-      });
+        state.validationErrors = action.payload?.validationErrors || {};
+      })
+      .addCase(softLogout.fulfilled, () => initialState)
+      .addCase(softLogout.rejected, () => initialState);
   },
 });
 
-export const { logout, restoreSessionFromToken } = authSlice.actions;
+export const { restoreSessionFromToken, logout, clearAuthNotifications } = authSlice.actions;
 export default authSlice.reducer;

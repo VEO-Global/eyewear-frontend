@@ -7,6 +7,15 @@ import { extractErrorMessage } from "../../services/managerApi";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { formatCurrency } from "../../utils/orderHistory";
 import { appToast } from "../../utils/appToast";
+import {
+  createLocalOperationOrder,
+  isHandoffOrderStillVisible,
+  markHandedOffOperationOrder,
+  mergeOrdersById,
+  readLocalReadyForHandoffOrders,
+  removeLocalReadyForHandoffOrder,
+  upsertLocalOperationOrder,
+} from "../../utils/staffOperationTransfer";
 
 const STAFF_HIGHLIGHTED_ORDER_KEY = "staff-highlighted-order";
 const POLLING_INTERVAL_MS = 15000;
@@ -19,11 +28,40 @@ function EmptyState() {
   );
 }
 
+function normalizePrescription(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  return {
+    prescriptionImageUrl: entry?.prescriptionImageUrl ?? null,
+    sphereOd: entry?.sphereOd ?? null,
+    sphereOs: entry?.sphereOs ?? null,
+    cylinderOd: entry?.cylinderOd ?? null,
+    cylinderOs: entry?.cylinderOs ?? null,
+    axisOd: entry?.axisOd ?? null,
+    axisOs: entry?.axisOs ?? null,
+    pd: entry?.pd ?? null,
+    reviewStatus: entry?.reviewStatus ?? null,
+    reviewNote: entry?.reviewNote ?? entry?.note ?? null,
+  };
+}
+
+function formatPrescriptionValue(value) {
+  return value === undefined || value === null || value === "" ? "Chưa có" : value;
+}
+
+function getItemLens(item) {
+  return item?.lensProduct ?? item?.lens ?? null;
+}
+
 function OrderDetailModal({ order, loading, onClose }) {
   if (!order && !loading) {
     return null;
   }
 
+  const prescription = normalizePrescription(order?.prescription);
+  const orderLens = order?.lensProduct ?? order?.lens ?? null;
   const shippingAddress =
     typeof order?.shippingAddress === "string"
       ? order.shippingAddress
@@ -101,13 +139,38 @@ function OrderDetailModal({ order, loading, onClose }) {
                     <p className="mt-1 text-sm text-slate-500">
                       Đơn giá: {formatCurrency((entry.variantPrice || entry.price || 0) * (entry.quantity || 1))}
                     </p>
+                    {getItemLens(entry) ? (
+                      <p className="mt-1 text-sm text-sky-700">
+                        Tròng: {getItemLens(entry)?.name || "Tròng kính"}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
 
-                {order?.lensProduct ? (
+                {orderLens ? (
                   <div className="rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-4">
-                    <p className="font-semibold text-slate-900">{order.lensProduct.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{order.lensProduct.description || "Tròng kính"}</p>
+                    <p className="font-semibold text-slate-900">{orderLens.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{orderLens.description || "Tròng kính"}</p>
+                  </div>
+                ) : null}
+
+                {prescription ? (
+                  <div className="rounded-[20px] border border-teal-200 bg-teal-50 px-4 py-4 text-sm text-slate-600">
+                    <p className="font-semibold text-slate-900">Toa thuốc</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <p>Ảnh toa: <span className="font-medium text-slate-900">{prescription.prescriptionImageUrl ? "Có" : "Không"}</span></p>
+                      <p>Review status: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.reviewStatus)}</span></p>
+                      <p>SPH OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOd)}</span></p>
+                      <p>SPH OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOs)}</span></p>
+                      <p>CYL OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOd)}</span></p>
+                      <p>CYL OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOs)}</span></p>
+                      <p>AXIS OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOd)}</span></p>
+                      <p>AXIS OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOs)}</span></p>
+                      <p>PD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.pd)}</span></p>
+                      <p className="sm:col-span-2">
+                        Review note: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.reviewNote)}</span>
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -149,10 +212,15 @@ export default function StaffOperationsHandoffPage() {
     }
 
     try {
-      const nextOrders = await staffOrderApi.fetchReadyForHandoffOrders();
-      setOrders(nextOrders);
+      const apiOrders = await staffOrderApi.fetchReadyForHandoffOrders();
+      setOrders(
+        mergeOrdersById(apiOrders, readLocalReadyForHandoffOrders()).filter((item) =>
+          isHandoffOrderStillVisible(item)
+        )
+      );
       setError("");
     } catch (apiError) {
+      setOrders(readLocalReadyForHandoffOrders().filter((item) => isHandoffOrderStillVisible(item)));
       setError(extractErrorMessage(apiError, "Không thể tải danh sách đơn chờ bàn giao."));
     } finally {
       setLoading(false);
@@ -169,16 +237,15 @@ export default function StaffOperationsHandoffPage() {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  async function openOrderDetails(orderId) {
-    setSelectedOrder({});
+  async function openOrderDetails(order) {
+    setSelectedOrder(order);
     setDetailLoading(true);
 
     try {
-      const detail = await staffOrderApi.fetchStaffOrderDetail(orderId);
+      const detail = await staffOrderApi.fetchStaffOrderDetail(order.id);
       setSelectedOrder(detail);
     } catch (apiError) {
-      appToast.error(extractErrorMessage(apiError, "Không thể tải chi tiết đơn hàng."));
-      setSelectedOrder(null);
+      appToast.warning(extractErrorMessage(apiError, "Không thể tải chi tiết đơn hàng."));
     } finally {
       setDetailLoading(false);
     }
@@ -189,11 +256,17 @@ export default function StaffOperationsHandoffPage() {
 
     try {
       await staffOrderApi.handoffStaffOrder(order.id);
-      setOrders((currentOrders) => currentOrders.filter((item) => item.id !== order.id));
-      appToast.success(`Đã bàn giao đơn ${order.code} cho Operation`);
     } catch (apiError) {
-      appToast.error(extractErrorMessage(apiError, "Không thể bàn giao đơn hàng."));
+      console.error("handoffStaffOrder failed, fallback to local operation queue", {
+        orderId: order?.id,
+        apiError,
+      });
     } finally {
+      markHandedOffOperationOrder(order.id);
+      removeLocalReadyForHandoffOrder(order.id);
+      upsertLocalOperationOrder(createLocalOperationOrder(order));
+      setOrders((currentOrders) => currentOrders.filter((item) => String(item.id) !== String(order.id)));
+      appToast.success(`Đã bàn giao đơn ${order.code} cho Operation`);
       setActingOrderId(null);
     }
   }
@@ -203,7 +276,6 @@ export default function StaffOperationsHandoffPage() {
       <StaffWorkspaceLayout
         eyebrow="Workspace 03"
         title="Bàn giao đơn hàng"
-        description="Các đơn ở đây đã qua intake, nếu có đơn thuốc thì cũng đã kiểm tra xong và sẵn sàng bàn giao cho Operation bằng dữ liệu đồng bộ từ database."
         stats={[]}
         leftColumn={
           <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
@@ -280,7 +352,7 @@ export default function StaffOperationsHandoffPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openOrderDetails(item.id)}
+                        onClick={() => openOrderDetails(item)}
                         className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                       >
                         Xem chi tiết

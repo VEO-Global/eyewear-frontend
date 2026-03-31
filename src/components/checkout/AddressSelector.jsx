@@ -1,6 +1,6 @@
 import { Input, Select } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
-import api from "../../configs/config-axios";
+import { locationService } from "../../services/locationService";
 
 const emptyAddress = {
   provinceCode: undefined,
@@ -92,8 +92,8 @@ export default function AddressSelector({ value, onChange, disabled = false }) {
     setProvinceError("");
 
     try {
-      const response = await api.get("/locations/provinces");
-      setProvinces(Array.isArray(response.data) ? response.data : []);
+      const response = await locationService.getProvinces();
+      setProvinces(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Khong tai duoc danh sach tinh/thanh:", error);
       setProvinces([]);
@@ -119,10 +119,8 @@ export default function AddressSelector({ value, onChange, disabled = false }) {
     setDistrictError("");
 
     try {
-      const response = await api.get(
-        `/locations/districts?provinceCode=${provinceCode}`
-      );
-      setDistricts(Array.isArray(response.data) ? response.data : []);
+      const response = await locationService.getDistricts(provinceCode);
+      setDistricts(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Khong tai duoc danh sach quan/huyen:", error);
       setDistricts([]);
@@ -148,8 +146,8 @@ export default function AddressSelector({ value, onChange, disabled = false }) {
     setWardError("");
 
     try {
-      const response = await api.get(`/locations/wards?districtCode=${districtCode}`);
-      setWards(Array.isArray(response.data) ? response.data : []);
+      const response = await locationService.getWards(districtCode);
+      setWards(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Khong tai duoc danh sach phuong/xa:", error);
       setWards([]);

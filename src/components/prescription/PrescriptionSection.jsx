@@ -11,6 +11,16 @@ import {
 import { Button, Form, Input, Segmented } from "antd";
 import { appToast } from "../../utils/appToast";
 
+const MANUAL_PRESCRIPTION_FIELDS = [
+  "sphereOd",
+  "sphereOs",
+  "cylinderOd",
+  "cylinderOs",
+  "axisOd",
+  "axisOs",
+  "pd",
+];
+
 const PRESCRIPTION_METHOD_OPTIONS = [
   { label: "Tải ảnh toa", value: "image" },
   { label: "Nhập tay", value: "manual" },
@@ -174,6 +184,10 @@ export default function PrescriptionSection({ form }) {
   const requiresImage = method === "image" || method === "both";
   const requiresManual = method === "manual";
   const showsManual = method === "manual" || method === "both";
+  const hasManualPrescriptionData = MANUAL_PRESCRIPTION_FIELDS.some((field) => {
+    const value = form.getFieldValue(["prescription", field]);
+    return value !== undefined && value !== null && String(value).trim() !== "";
+  });
 
   async function handleFileChange(event) {
     const file = event.target.files?.[0];
@@ -279,6 +293,9 @@ export default function PrescriptionSection({ form }) {
                 {
                   validator: async (_, value) => {
                     if (!requiresImage || value) {
+                      return Promise.resolve();
+                    }
+                    if (hasManualPrescriptionData) {
                       return Promise.resolve();
                     }
 
@@ -478,12 +495,28 @@ export default function PrescriptionSection({ form }) {
                   placeholder="Ví dụ: 62"
                   helperText="Thông số này thường nằm trên toa hoặc được đo tại cửa hàng."
                   example="62"
-                  rules={buildPdRules(requiresManual)}
+                  rules={buildPdRules(true)}
                 />
               </div>
             </div>
           </div>
         )}
+
+        {!showsManual ? (
+          <div className="mt-6 rounded-[28px] border border-slate-200 bg-slate-50 p-5 sm:p-6">
+            <div className="max-w-lg">
+              <PrescriptionField
+                label="Khoáº£ng cĂ¡ch Ä‘á»“ng tá»­"
+                technicalName="PD"
+                name={["prescription", "pd"]}
+                placeholder="VĂ­ dá»¥: 62"
+                helperText="ThĂ´ng sá»‘ nĂ y thÆ°á»ng náº±m trĂªn toa hoáº·c Ä‘Æ°á»£c Ä‘o táº¡i cá»­a hĂ ng."
+                example="62"
+                rules={buildPdRules(true)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

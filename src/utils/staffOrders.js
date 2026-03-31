@@ -8,6 +8,28 @@ import {
 
 const ORDER_HISTORY_STORAGE_PREFIX = "order-history:";
 
+function parseApiDateTime(value) {
+  if (!value) {
+    return Date.now();
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  const rawValue = String(value).trim();
+
+  if (!rawValue) {
+    return Date.now();
+  }
+
+  const hasExplicitTimezone = /([zZ]|[+-]\d{2}:\d{2})$/.test(rawValue);
+  const normalizedValue = hasExplicitTimezone ? rawValue : `${rawValue}Z`;
+  const timestamp = new Date(normalizedValue).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
+
 function readAllStoredOrderBuckets() {
   const buckets = [];
 
@@ -57,7 +79,7 @@ function getOrderChannel(order) {
 }
 
 function getOrderPriority(order) {
-  const createdAtMs = new Date(order?.createdAt || Date.now()).getTime();
+  const createdAtMs = parseApiDateTime(order?.createdAt);
   const ageMinutes = Math.max(0, Math.round((Date.now() - createdAtMs) / 60000));
 
   if (ageMinutes >= 30) {
@@ -65,26 +87,26 @@ function getOrderPriority(order) {
   }
 
   if (ageMinutes >= 10) {
-    return "Thuong";
+    return "Thường";
   }
 
   return null;
 }
 
 function getQueueStatus(order) {
-  if (order?.phase === ORDER_PHASE.PROCESSING) {
-    return "Chờ bàn giao đơn hàng";
+  if (order?.phase === ORDER_PHASE.PRESCRIPTION_REVIEW) {
+    return "Chờ kiểm tra đơn thuốc";
   }
 
-  if (order?.requiresPrescription) {
-    return "Chờ kiểm đơn thuốc";
+  if (order?.phase === ORDER_PHASE.PROCESSING) {
+    return "Chờ bàn giao đơn hàng";
   }
 
   return "Chờ xác nhận đơn";
 }
 
 function formatWaitTime(createdAt) {
-  const createdAtMs = new Date(createdAt || Date.now()).getTime();
+  const createdAtMs = parseApiDateTime(createdAt);
   const ageMinutes = Math.max(0, Math.round((Date.now() - createdAtMs) / 60000));
 
   return `${String(ageMinutes).padStart(2, "0")} phút`;
@@ -98,7 +120,7 @@ function mapStaffOrder(order) {
 
   return {
     ...order,
-    code: order.orderNumber || order.id,
+    code: order.orderCode || order.orderNumber || order.id,
     customer: fallbackName,
     customerPhone: fallbackPhone,
     customerEmail: fallbackEmail,
@@ -123,7 +145,7 @@ export function readAllStaffOrders() {
         storageUserId: userId,
       }))
     )
-    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+    .sort((left, right) => parseApiDateTime(left.createdAt) - parseApiDateTime(right.createdAt))
     .map(mapStaffOrder);
 }
 

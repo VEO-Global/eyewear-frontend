@@ -13,7 +13,7 @@ export const staffTaskItems = [
     description:
       "Đối chiếu thông số, ghi chú điểm cần làm rõ và chủ động liên hệ khách để chốt điều chỉnh.",
     href: "/staff/prescription-support",
-    shortLabel: "Kiểm tra Prescription ",
+    shortLabel: "Kiểm tra Prescription",
   },
   {
     id: "operations-handoff",
@@ -22,13 +22,5 @@ export const staffTaskItems = [
       "Đóng gói thông tin hoàn tất, phân luồng gia công và bàn giao đúng SLA cho bộ phận vận hành.",
     href: "/staff/operations-handoff",
     shortLabel: "Bàn giao đơn hàng",
-  },
-  {
-    id: "after-sales",
-    title: "Xử lý khiếu nại, đổi trả, bảo hành, hoàn tiền",
-    description:
-      "Theo dõi các case sau bán, ưu tiên khách gấp và giữ lịch sử trao đổi minh bạch.",
-    href: "/staff/after-sales",
-    shortLabel: "Hỗ trợ & giải quyết yêu cầu",
   },
 ];

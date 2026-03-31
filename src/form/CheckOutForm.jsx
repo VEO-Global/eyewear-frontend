@@ -6,11 +6,7 @@ import AddressSelector from "../components/checkout/AddressSelector";
 import PrescriptionSection from "../components/prescription/PrescriptionSection";
 import { fetchProfile } from "../redux/auth/authSlice";
 import { appToast } from "../utils/appToast";
-import { CHECKOUT_LENS_SELECTION_STORAGE_KEY } from "../constants/lensProducts";
-import {
-  extractLatestCheckoutAddress,
-  hasCheckoutAddress,
-} from "../utils/userAddress";
+import { extractLatestCheckoutAddress, hasCheckoutAddress } from "../utils/userAddress";
 
 const validateShippingAddress = (_, value) => {
   if (!value || typeof value !== "object") {
@@ -65,12 +61,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
   }, [dispatch, user]);
 
   useEffect(() => {
-    const currentValues = form.getFieldsValue([
-      "receiverName",
-      "phoneNumber",
-      "shippingAddress",
-    ]);
-
+    const currentValues = form.getFieldsValue(["receiverName", "phoneNumber", "shippingAddress"]);
     const nextValues = {};
 
     if (!currentValues.receiverName?.trim() && user?.fullName) {
@@ -106,32 +97,53 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
     }
   }, [form, prescriptionOption]);
 
-  const handleSubmit = async (values) => {
+  async function handleSubmit(values) {
     if (!cart.length) {
       appToast.warning("Giỏ hàng của bạn đang trống.");
       return;
     }
 
     if (!selectedCartItems.length) {
-      appToast.warning("Vui lòng tick ít nhất một sản phẩm để thanh toán.");
+      appToast.warning("Vui lòng chọn ít nhất một sản phẩm để thanh toán.");
       return;
     }
 
-    const navigationState = {
-      checkoutValues: values,
-      selectedLensProduct,
-      selectedCartItems,
-    };
+    if (values.prescriptionOption === "with_prescription") {
+      const prescription = values?.prescription || {};
+      const hasValue = (field) =>
+        prescription[field] !== undefined &&
+        prescription[field] !== null &&
+        `${prescription[field]}`.trim() !== "";
 
-    sessionStorage.setItem(
-      CHECKOUT_LENS_SELECTION_STORAGE_KEY,
-      JSON.stringify(navigationState)
-    );
+      if (!hasValue("pd")) {
+        appToast.warning("Vui lòng nhập PD trước khi gửi đơn có toa thuốc.");
+        return;
+      }
 
-    navigate("/user/cart/payment?step=qr", {
-      state: navigationState,
+      if (hasValue("cylinderOd") && !hasValue("axisOd")) {
+        appToast.warning("Mắt phải đã có CYL nên cần nhập thêm AXIS.");
+        return;
+      }
+
+      if (hasValue("cylinderOs") && !hasValue("axisOs")) {
+        appToast.warning("Mắt trái đã có CYL nên cần nhập thêm AXIS.");
+        return;
+      }
+
+      if (!selectedLensProduct?.id) {
+        appToast.warning("Vui lòng chọn tròng kính cho đơn có toa thuốc.");
+        return;
+      }
+    }
+
+    navigate("/user/cart/payment?step=process", {
+      state: {
+        checkoutValues: values,
+        selectedLensProduct,
+        selectedCartItems,
+      },
     });
-  };
+  }
 
   return (
     <Form
@@ -142,6 +154,7 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
       initialValues={{
         prescriptionOption: "without_prescription",
         prescriptionMethod: "image",
+        paymentMethod: "COD",
       }}
       style={{ border: 0 }}
     >
@@ -177,6 +190,23 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
 
       <Form.Item label="Ghi chú" name="note">
         <Input.TextArea rows={2} placeholder="Ví dụ: Giao giờ hành chính" />
+      </Form.Item>
+
+      <Form.Item
+        label="Phương thức thanh toán"
+        name="paymentMethod"
+        rules={[{ required: true, message: "Vui lòng chọn phương thức thanh toán" }]}
+      >
+        <Select
+          size="large"
+          options={[
+            { label: "Thanh toán khi nhận hàng (COD)", value: "COD" },
+            { label: "Chuyển khoản ngân hàng", value: "BANK_TRANSFER" },
+            { label: "PayOS", value: "PAYOS" },
+            { label: "MoMo", value: "MOMO" },
+            { label: "VNPay", value: "VNPAY" },
+          ]}
+        />
       </Form.Item>
 
       <Form.Item label="Đơn thuốc" name="prescriptionOption" rules={[{ required: true }]}>

@@ -78,7 +78,7 @@ export default function ProductDetail() {
         material: product.material,
         imgUrl: product.imageUrl || product.image || product.model3dUrl,
         gender: product.gender,
-        quantity: getVariantStock(currentVariant),
+        cartQuantity: 1,
       })
     );
 

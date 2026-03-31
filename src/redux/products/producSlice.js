@@ -1,32 +1,28 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "../../configs/config-axios";
-import { logout } from "../auth/authSlice";
+import { logout, softLogout } from "../auth/authSlice";
+import { productService } from "../../services/productService";
 import { isPreorderProduct, normalizeCatalogType } from "../../utils/productCatalog";
 import { extractProductImages, getPrimaryProductImage } from "../../utils/productImages";
+import { getApiErrorMessage } from "../../utils/apiError";
 
-const PRODUCT_STOCK_OVERRIDES_STORAGE_KEY = "product-stock-overrides";
-
-function readStoredStockOverrides() {
-  try {
-    const storedOverrides = localStorage.getItem(PRODUCT_STOCK_OVERRIDES_STORAGE_KEY);
-
-    if (!storedOverrides) {
-      return {};
-    }
-
-    const parsedOverrides = JSON.parse(storedOverrides);
-    return parsedOverrides && typeof parsedOverrides === "object" ? parsedOverrides : {};
-  } catch {
-    return {};
+function extractProducts(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
   }
-}
 
-function getVariantOverrideKey(productId, variantId) {
-  return `${Number(productId)}:${Number(variantId)}`;
-}
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
 
-function getProductOverrideKey(productId) {
-  return `${Number(productId)}`;
+  if (Array.isArray(payload?.content)) {
+    return payload.content;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  return [];
 }
 
 function normalizeProduct(product) {
@@ -48,44 +44,7 @@ function normalizeProduct(product) {
           ...variant,
           stockQuantity: Number(variant?.stockQuantity ?? variant?.quantity ?? 0),
         }))
-      : product.variants,
-  };
-}
-
-function applyStockOverridesToProduct(product, stockOverrides) {
-  if (!product) {
-    return product;
-  }
-
-  if (Array.isArray(product.variants) && product.variants.length) {
-    return {
-      ...product,
-      variants: product.variants.map((variant) => {
-        const variantOverride = stockOverrides[
-          getVariantOverrideKey(product.id, variant.id)
-        ];
-
-        if (variantOverride === undefined) {
-          return variant;
-        }
-
-        return {
-          ...variant,
-          stockQuantity: variantOverride,
-        };
-      }),
-    };
-  }
-
-  const productOverride = stockOverrides[getProductOverrideKey(product.id)];
-
-  if (productOverride === undefined) {
-    return product;
-  }
-
-  return {
-    ...product,
-    stockQuantity: productOverride,
+      : [],
   };
 }
 
@@ -95,20 +54,15 @@ const initialState = {
   selectedProduct: null,
   loading: false,
   error: null,
-  stockOverrides: readStoredStockOverrides(),
 };
 
 export const fetchProducts = createAsyncThunk(
   "products/fetch",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get("/products");
-      const products = Array.isArray(response.data) ? response.data : [];
-      return products.map(normalizeProduct);
+      return extractProducts(await productService.getProducts()).map(normalizeProduct);
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Không thể lấy danh sách sản phẩm"
-      );
+      return rejectWithValue(getApiErrorMessage(error, "Không thể lấy danh sách sản phẩm."));
     }
   }
 );
@@ -117,15 +71,15 @@ export const fetchPreorderProducts = createAsyncThunk(
   "products/fetchPreorder",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get("/products");
-      const products = Array.isArray(response.data) ? response.data : [];
+      const payload = await productService.getPreorderProducts();
+      const products = extractProducts(payload).map(normalizeProduct);
 
-      return products
+      return products.length ? products : extractProducts(await productService.getProducts())
         .map(normalizeProduct)
         .filter((product) => isPreorderProduct(product));
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Không thể lấy danh sách sản phẩm đặt trước"
+        getApiErrorMessage(error, "Không thể lấy danh sách sản phẩm đặt trước.")
       );
     }
   }
@@ -135,12 +89,9 @@ export const fetchProductById = createAsyncThunk(
   "products/fetchById",
   async (id, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/products/${Number(id)}`);
-      return normalizeProduct(response.data);
+      return normalizeProduct(await productService.getProductById(Number(id)));
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Không thể lấy sản phẩm"
-      );
+      return rejectWithValue(getApiErrorMessage(error, "Không thể lấy sản phẩm."));
     }
   }
 );
@@ -160,38 +111,21 @@ const productSlice = createSlice({
           return product;
         }
 
-        if (!product?.variants?.length) {
-          const currentStock = Number(
-            product.stockQuantity ?? product.quantity ?? product.stock ?? 0
-          );
-          const nextStock = Math.max(0, currentStock - amount);
-
-          state.stockOverrides[getProductOverrideKey(productId)] = nextStock;
-
-          return {
-            ...product,
-            stockQuantity: nextStock,
-          };
-        }
-
         return {
           ...product,
-          variants: product.variants.map((variant) => {
-            if (Number(variant.id) !== Number(variantId)) {
-              return variant;
-            }
-
-            const nextStock = Math.max(
-              0,
-              Number(variant.stockQuantity || 0) - amount
-            );
-            state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
-
-            return {
-              ...variant,
-              stockQuantity: nextStock,
-            };
-          }),
+          variants: Array.isArray(product.variants)
+            ? product.variants.map((variant) =>
+                Number(variant.id) === Number(variantId)
+                  ? {
+                      ...variant,
+                      stockQuantity: Math.max(
+                        0,
+                        Number(variant.stockQuantity || 0) - Number(amount || 1)
+                      ),
+                    }
+                  : variant
+              )
+            : [],
         };
       };
 
@@ -207,38 +141,21 @@ const productSlice = createSlice({
           return product;
         }
 
-        if (!product?.variants?.length) {
-          const currentStock = Number(
-            product.stockQuantity ?? product.quantity ?? product.stock ?? 0
-          );
-          const nextStock = Math.max(0, currentStock + amount);
-
-          state.stockOverrides[getProductOverrideKey(productId)] = nextStock;
-
-          return {
-            ...product,
-            stockQuantity: nextStock,
-          };
-        }
-
         return {
           ...product,
-          variants: product.variants.map((variant) => {
-            if (Number(variant.id) !== Number(variantId)) {
-              return variant;
-            }
-
-            const nextStock = Math.max(
-              0,
-              Number(variant.stockQuantity || 0) + amount
-            );
-            state.stockOverrides[getVariantOverrideKey(productId, variantId)] = nextStock;
-
-            return {
-              ...variant,
-              stockQuantity: nextStock,
-            };
-          }),
+          variants: Array.isArray(product.variants)
+            ? product.variants.map((variant) =>
+                Number(variant.id) === Number(variantId)
+                  ? {
+                      ...variant,
+                      stockQuantity: Math.max(
+                        0,
+                        Number(variant.stockQuantity || 0) + Number(amount || 1)
+                      ),
+                    }
+                  : variant
+              )
+            : [],
         };
       };
 
@@ -255,9 +172,7 @@ const productSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        state.products = action.payload.map((product) =>
-          applyStockOverridesToProduct(product, state.stockOverrides)
-        );
+        state.products = action.payload;
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
@@ -269,9 +184,7 @@ const productSlice = createSlice({
       })
       .addCase(fetchPreorderProducts.fulfilled, (state, action) => {
         state.loading = false;
-        state.preorderProducts = action.payload.map((product) =>
-          applyStockOverridesToProduct(product, state.stockOverrides)
-        );
+        state.preorderProducts = action.payload;
       })
       .addCase(fetchPreorderProducts.rejected, (state, action) => {
         state.loading = false;
@@ -283,10 +196,7 @@ const productSlice = createSlice({
       })
       .addCase(fetchProductById.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedProduct = applyStockOverridesToProduct(
-          action.payload,
-          state.stockOverrides
-        );
+        state.selectedProduct = action.payload;
       })
       .addCase(fetchProductById.rejected, (state, action) => {
         state.loading = false;
@@ -295,13 +205,12 @@ const productSlice = createSlice({
       .addCase(logout, (state) => {
         state.selectedProduct = null;
         state.preorderProducts = [];
-      });
+      })
+      .addCase(softLogout.fulfilled, () => initialState);
   },
 });
 
 export const { clearSelectedProduct, decreaseVariantStock, increaseVariantStock } =
   productSlice.actions;
-
-export { PRODUCT_STOCK_OVERRIDES_STORAGE_KEY };
 
 export default productSlice.reducer;

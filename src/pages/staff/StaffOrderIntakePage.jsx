@@ -9,13 +9,17 @@ import { extractErrorMessage } from "../../services/managerApi";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE, formatCurrency } from "../../utils/orderHistory";
 import { appToast } from "../../utils/appToast";
+import {
+  filterVisibleStaffIntakeOrders,
+  readHiddenIntakeOrderIds,
+  writeHiddenIntakeOrderIds,
+} from "../../utils/staffIntakeVisibility";
 
 const STAFF_HIGHLIGHTED_ORDER_KEY = "staff-highlighted-order";
 const POLLING_INTERVAL_MS = 15000;
 
 function QueueCard({ item, onPrimaryAction, onShowDetails, isActing }) {
-  const primaryLabel = item.requiresPrescription ? "Kiểm tra đơn thuốc" : "Xác nhận đơn hàng";
-  const secondaryLabel = item.requiresPrescription ? "Xem chi tiết sản phẩm" : "Xem chi tiết đơn hàng";
+  const primaryLabel = item.requiresPrescription ? "Xác nhận đơn thuốc" : "Xác nhận đơn hàng";
 
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -58,7 +62,7 @@ function QueueCard({ item, onPrimaryAction, onShowDetails, isActing }) {
           onClick={() => onShowDetails(item.id)}
           className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
-          {secondaryLabel}
+          Xem chi tiết đơn hàng
         </button>
       </div>
     </div>
@@ -73,11 +77,40 @@ function EmptyQueue() {
   );
 }
 
+function normalizePrescription(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  return {
+    prescriptionImageUrl: entry?.prescriptionImageUrl ?? null,
+    sphereOd: entry?.sphereOd ?? null,
+    sphereOs: entry?.sphereOs ?? null,
+    cylinderOd: entry?.cylinderOd ?? null,
+    cylinderOs: entry?.cylinderOs ?? null,
+    axisOd: entry?.axisOd ?? null,
+    axisOs: entry?.axisOs ?? null,
+    pd: entry?.pd ?? null,
+    reviewStatus: entry?.reviewStatus ?? null,
+    reviewNote: entry?.reviewNote ?? entry?.note ?? null,
+  };
+}
+
+function formatPrescriptionValue(value) {
+  return value === undefined || value === null || value === "" ? "N/A" : value;
+}
+
+function getItemLens(item) {
+  return item?.lensProduct ?? item?.lens ?? null;
+}
+
 function OrderDetailModal({ order, loading, onClose }) {
   if (!order && !loading) {
     return null;
   }
 
+  const prescription = normalizePrescription(order?.prescription);
+  const orderLens = order?.lensProduct ?? order?.lens ?? null;
   const shippingAddress =
     typeof order?.shippingAddress === "string"
       ? order.shippingAddress
@@ -125,43 +158,21 @@ function OrderDetailModal({ order, loading, onClose }) {
               <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
                 <h3 className="text-lg font-bold text-slate-900">Thông tin người đặt</h3>
                 <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-900">Họ tên:</span> {order?.customer}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Email:</span> {order?.customerEmail || "Chưa có"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Số điện thoại:</span>{" "}
-                    {order?.customerPhone || "Chưa có"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Người nhận:</span>{" "}
-                    {order?.receiverName || order?.customer}
-                  </p>
+                  <p><span className="font-semibold text-slate-900">Họ tên:</span> {order?.customer}</p>
+                  <p><span className="font-semibold text-slate-900">Email:</span> {order?.customerEmail || "Chưa có"}</p>
+                  <p><span className="font-semibold text-slate-900">Số điện thoại:</span> {order?.customerPhone || "Chưa có"}</p>
+                  <p><span className="font-semibold text-slate-900">Người nhận:</span> {order?.receiverName || order?.customer}</p>
                 </div>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
                 <h3 className="text-lg font-bold text-slate-900">Thông tin đơn hàng</h3>
                 <div className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-900">Tổng tiền:</span> {order?.totalText}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Kênh:</span> {order?.channel}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Đơn thuốc:</span>{" "}
-                    {order?.requiresPrescription ? "Có" : "Không"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Ghi chú:</span> {order?.note || "Không có"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Địa chỉ giao hàng:</span>{" "}
-                    {shippingAddress || "Chưa có"}
-                  </p>
+                  <p><span className="font-semibold text-slate-900">Tổng tiền:</span> {order?.totalText}</p>
+                  <p><span className="font-semibold text-slate-900">Kênh:</span> {order?.channel}</p>
+                  <p><span className="font-semibold text-slate-900">Đơn thuốc:</span> {order?.requiresPrescription ? "Có" : "Không"}</p>
+                  <p><span className="font-semibold text-slate-900">Ghi chú:</span> {order?.note || "Không có"}</p>
+                  <p><span className="font-semibold text-slate-900">Địa chỉ giao hàng:</span> {shippingAddress || "Chưa có"}</p>
                 </div>
               </div>
             </div>
@@ -176,13 +187,38 @@ function OrderDetailModal({ order, loading, onClose }) {
                     <p className="mt-1 text-sm text-slate-500">
                       Đơn giá: {formatCurrency((entry.variantPrice || entry.price || 0) * (entry.quantity || 1))}
                     </p>
+                    {getItemLens(entry) ? (
+                      <p className="mt-1 text-sm text-sky-700">
+                        Tròng: {getItemLens(entry)?.name || "Tròng kính"}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
 
-                {order?.lensProduct ? (
+                {orderLens ? (
                   <div className="rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-4">
-                    <p className="font-semibold text-slate-900">{order.lensProduct.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{order.lensProduct.description || "Tròng kính"}</p>
+                    <p className="font-semibold text-slate-900">{orderLens.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {order?.lensProduct?.description || "Tròng kính"}
+                    </p>
+                  </div>
+                ) : null}
+
+                {prescription ? (
+                  <div className="rounded-[20px] border border-teal-200 bg-teal-50 px-4 py-4 text-sm text-slate-600">
+                    <p className="font-semibold text-slate-900">Toa thuốc</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <p>Ảnh toa: <span className="font-medium text-slate-900">{prescription.prescriptionImageUrl ? "Có" : "Không"}</span></p>
+                      <p>Review status: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.reviewStatus)}</span></p>
+                      <p>SPH OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOd)}</span></p>
+                      <p>SPH OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOs)}</span></p>
+                      <p>CYL OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOd)}</span></p>
+                      <p>CYL OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOs)}</span></p>
+                      <p>AXIS OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOd)}</span></p>
+                      <p>AXIS OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOs)}</span></p>
+                      <p>PD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.pd)}</span></p>
+                      <p className="sm:col-span-2">Review note: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.reviewNote)}</span></p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -211,9 +247,12 @@ export default function StaffOrderIntakePage() {
     }
 
     try {
-      const nextOrders = await staffOrderApi.fetchStaffOrders({
+      const hiddenOrderIds = readHiddenIntakeOrderIds();
+      const pendingOrders = await staffOrderApi.fetchStaffOrders({
         phase: ORDER_PHASE.PENDING_CONFIRMATION,
       });
+
+      const nextOrders = filterVisibleStaffIntakeOrders(pendingOrders, hiddenOrderIds);
 
       setOrders(nextOrders);
       setError("");
@@ -250,24 +289,9 @@ export default function StaffOrderIntakePage() {
   }, []);
 
   const todayFlow = [
-    {
-      label: "Đơn chờ xử lý",
-      value: `${orders.length} đơn`,
-      icon: ClipboardList,
-      tone: "teal",
-    },
-    {
-      label: "Cần kiểm tra đơn thuốc",
-      value: `${orders.filter((item) => item.requiresPrescription).length} đơn`,
-      icon: PackageSearch,
-      tone: "amber",
-    },
-    {
-      label: "Cần gọi lại khách",
-      value: "0 đơn",
-      icon: PhoneCall,
-      tone: "rose",
-    },
+    { label: "Đơn chờ xử lý", value: `${orders.length} đơn`, icon: ClipboardList, tone: "teal" },
+    { label: "Cần kiểm tra đơn thuốc", value: "Xem tab kiểm tra", icon: PackageSearch, tone: "amber" },
+    { label: "Cần gọi lại khách", value: "0 đơn", icon: PhoneCall, tone: "rose" },
   ];
 
   async function openOrderDetails(orderId) {
@@ -290,8 +314,13 @@ export default function StaffOrderIntakePage() {
 
     try {
       const updatedOrder = await staffOrderApi.confirmStaffOrder(order.id);
+      const hiddenOrderIds = readHiddenIntakeOrderIds();
+      hiddenOrderIds.add(String(order.id));
+      hiddenOrderIds.add(String(updatedOrder.id ?? order.id));
+      writeHiddenIntakeOrderIds(hiddenOrderIds);
+
       const targetPath =
-        updatedOrder.phase === ORDER_PHASE.PRESCRIPTION_REVIEW || updatedOrder.requiresPrescription
+        updatedOrder.phase === ORDER_PHASE.PRESCRIPTION_REVIEW
           ? "/staff/prescription-support"
           : "/staff/operations-handoff";
 
@@ -313,6 +342,20 @@ export default function StaffOrderIntakePage() {
         },
       });
     } catch (apiError) {
+      const hiddenOrderIds = readHiddenIntakeOrderIds();
+      const normalizedMessage = String(
+        extractErrorMessage(apiError, "Không thể xác nhận đơn hàng.")
+      ).toLowerCase();
+
+      if (
+        normalizedMessage.includes("only pending orders can move") ||
+        normalizedMessage.includes("pending orders")
+      ) {
+        hiddenOrderIds.add(String(order.id));
+        writeHiddenIntakeOrderIds(hiddenOrderIds);
+        setOrders((current) => current.filter((item) => String(item.id) !== String(order.id)));
+      }
+
       appToast.error(extractErrorMessage(apiError, "Không thể xác nhận đơn hàng."));
     } finally {
       setActingOrderId(null);
@@ -324,7 +367,6 @@ export default function StaffOrderIntakePage() {
       <StaffWorkspaceLayout
         eyebrow="Workspace 01"
         title="Tiếp nhận và xử lý đơn hàng"
-        description="Màn hình staff nhận đơn mới theo dữ liệu thật từ hệ thống, tách nhanh luồng có đơn thuốc và không có đơn thuốc để chuyển sang bước xử lý tiếp theo."
         stats={[]}
         leftColumn={
           <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
@@ -403,7 +445,11 @@ export default function StaffOrderIntakePage() {
         }
       />
 
-      <OrderDetailModal order={selectedOrder} loading={detailLoading} onClose={() => setSelectedOrder(null)} />
+      <OrderDetailModal
+        order={selectedOrder}
+        loading={detailLoading}
+        onClose={() => setSelectedOrder(null)}
+      />
     </>
   );
 }

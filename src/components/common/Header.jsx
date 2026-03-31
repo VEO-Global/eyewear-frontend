@@ -3,7 +3,7 @@ import { Search, ShoppingCart, Glasses, User, Bell, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Tooltip } from "antd";
-import { logout } from "../../redux/auth/authSlice";
+import { softLogout } from "../../redux/auth/authSlice";
 import { fetchProducts } from "../../redux/products/producSlice";
 import { syncPreorderCartAvailability } from "../../redux/cart/cartSlice";
 import DropDownMenu from "./DropDownMenu";
@@ -12,10 +12,25 @@ import {
   removeNotification,
 } from "../../redux/notification/notificationSlice";
 import { appToast } from "../../utils/appToast";
-import { getRoleDisplayLabel, isManagerRole, isStaffRole } from "../../utils/authRole";
+import {
+  getRoleDisplayLabel,
+  isManagerRole,
+  isOperationsRole,
+  isStaffRole,
+} from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE } from "../../utils/orderHistory";
+import {
+  filterVisibleStaffIntakeOrders,
+  filterVisiblePrescriptionSupportOrders,
+  readHiddenIntakeOrderIds,
+} from "../../utils/staffIntakeVisibility";
+import {
+  isHandoffOrderStillVisible,
+  isPrescriptionOrderStillVisible,
+  readLocalReadyForHandoffOrders,
+} from "../../utils/staffOperationTransfer";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -140,7 +155,7 @@ export function Header() {
 
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { cart, totalProduct } = useSelector((state) => state.cart);
-  const { items: notifications } = useSelector((state) => state.notifications);
+  const { items: notifications, unreadCount } = useSelector((state) => state.notifications);
   const { products } = useSelector((state) => state.products);
   const navigate = useNavigate();
   const location = useLocation();
@@ -159,7 +174,6 @@ export function Header() {
   const notificationRef = useRef(null);
   const searchRef = useRef(null);
 
-  const unreadCount = notifications.filter((item) => !item.read).length;
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
   const isOrderTrackingPage = location.pathname === "/user/orders";
   const activeOrderTab = new URLSearchParams(location.search).get("tab") || "tat-ca";
@@ -168,6 +182,7 @@ export function Header() {
   const shouldShowSearch = !isAuthenticated || customerOnly;
   const staffOnly = isStaffRole(user?.role);
   const managerOnly = isManagerRole(user?.role);
+  const operationsOnly = isOperationsRole(user?.role);
 
   useEffect(() => {
     if (!products.length) {
@@ -176,7 +191,7 @@ export function Header() {
   }, [dispatch, products.length]);
 
   useEffect(() => {
-    if (!isAuthenticated || staffOnly || managerOnly || !cart.length) {
+    if (!isAuthenticated || staffOnly || managerOnly || operationsOnly || !cart.length) {
       return undefined;
     }
 
@@ -196,7 +211,7 @@ export function Header() {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [cart.length, dispatch, isAuthenticated, managerOnly, staffOnly]);
+  }, [cart.length, dispatch, isAuthenticated, managerOnly, operationsOnly, staffOnly]);
 
   const productSearchItems = useMemo(
     () =>
@@ -240,8 +255,7 @@ export function Header() {
   }
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    dispatch(logout());
+    dispatch(softLogout());
     appToast.success("Đăng xuất thành công");
     navigate("/");
   }
@@ -340,14 +354,23 @@ export function Header() {
           staffOrderApi.fetchReadyForHandoffOrders(),
         ]);
 
+        const visibleIntakeOrders = filterVisibleStaffIntakeOrders(
+          intakeOrders,
+          readHiddenIntakeOrderIds()
+        );
+        const visiblePrescriptionOrders = filterVisiblePrescriptionSupportOrders(
+          prescriptionOrders
+        ).filter((item) => isPrescriptionOrderStillVisible(item));
+        const visibleHandoffOrders = mergeVisibleHandoffOrders(handoffOrders);
+
         if (!active) {
           return;
         }
 
         setStaffTaskCounts({
-          "order-intake": intakeOrders.length,
-          "prescription-support": prescriptionOrders.length,
-          "operations-handoff": handoffOrders.length,
+          "order-intake": visibleIntakeOrders.length,
+          "prescription-support": visiblePrescriptionOrders.length,
+          "operations-handoff": visibleHandoffOrders.length,
           "after-sales": 0,
         });
       } catch {
@@ -373,6 +396,22 @@ export function Header() {
       window.clearInterval(intervalId);
     };
   }, [staffOnly]);
+
+  function mergeVisibleHandoffOrders(apiOrders) {
+    const map = new Map();
+
+    [...(Array.isArray(apiOrders) ? apiOrders : []), ...readLocalReadyForHandoffOrders()].forEach((item) => {
+      const id = String(item?.id ?? item?.orderId ?? "").trim();
+
+      if (!id || !isHandoffOrderStillVisible(item)) {
+        return;
+      }
+
+      map.set(id, item);
+    });
+
+    return Array.from(map.values());
+  }
 
   function formatNotificationTime(createdAt) {
     const date = new Date(createdAt);
@@ -581,7 +620,7 @@ export function Header() {
               )}
             </div>
 
-            {!adminOnly && !staffOnly && !managerOnly && (
+            {!adminOnly && !staffOnly && !managerOnly && !operationsOnly && (
               <Tooltip title="Xem tất cả sản phẩm trong giỏ hàng" onClick={handleCartClick}>
                 <div className="relative cursor-pointer p-2 text-gray-600 transition-colors hover:text-teal-600">
                   <ShoppingCart className="h-6 w-6" />
@@ -624,7 +663,7 @@ export function Header() {
           </div>
         )}
 
-        {!adminOnly && !isOrderTrackingPage && !staffOnly && !managerOnly && (
+        {!adminOnly && !isOrderTrackingPage && !staffOnly && !managerOnly && !operationsOnly && (
           <nav className="hidden items-center justify-between gap-8 py-3 lg:flex">
             {navItems.map((item) => (
               <button

@@ -4,14 +4,20 @@ import { Button, Checkbox, Form, Input } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchProfile, loginUser } from "../redux/auth/authSlice";
+import { fetchCart } from "../redux/cart/cartSlice";
+import { fetchFavorites } from "../redux/favorites/favoriteSlice";
+import { fetchNotifications } from "../redux/notification/notificationSlice";
 import { appToast } from "../utils/appToast";
+import { normalizeRoleName } from "../utils/authRole";
 
 function resolvePostLoginPath(role) {
-  switch (role) {
+  switch (normalizeRoleName(role)) {
     case "ADMIN":
       return "/admin/dashboard";
     case "MANAGER":
       return "/manager/dashboard";
+    case "OPERATIONS":
+      return "/operation";
     case "SALES":
       return "/";
     case "CUSTOMER":
@@ -30,12 +36,17 @@ export default function LoginnForm() {
 
     if (loginUser.fulfilled.match(result)) {
       const profileResult = await dispatch(fetchProfile());
+      await Promise.all([
+        dispatch(fetchCart()),
+        dispatch(fetchFavorites()),
+        dispatch(fetchNotifications()),
+      ]);
       const nextRole = profileResult.payload?.role ?? result.payload.sessionUser?.role ?? user?.role;
       const nextPath = resolvePostLoginPath(nextRole);
 
       if (fetchProfile.fulfilled.match(profileResult)) {
         appToast.success("Đăng nhập thành công");
-        navigate(nextPath);
+        navigate(nextPath, { replace: true });
         return;
       }
 
@@ -45,7 +56,7 @@ export default function LoginnForm() {
         appToast.success("Đăng nhập thành công");
       }
 
-      navigate(nextPath);
+      navigate(nextPath, { replace: true });
       return;
     }
 
@@ -56,7 +67,7 @@ export default function LoginnForm() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(resolvePostLoginPath(user?.role));
+      navigate(resolvePostLoginPath(user?.role), { replace: true });
     }
   }, [isAuthenticated, navigate, user?.role]);
 
