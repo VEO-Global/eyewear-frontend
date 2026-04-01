@@ -201,11 +201,8 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
           size="large"
           options={[
             { label: "Thanh toán khi nhận hàng (COD)", value: "COD" },
-            { label: "Chuyển khoản ngân hàng", value: "BANK_TRANSFER" },
-            { label: "PayOS", value: "PAYOS" },
-            { label: "MoMo", value: "MOMO" },
-            { label: "VNPay", value: "VNPAY" },
-          ]}
+                        { label: "PayOS", value: "PAYOS" },
+                                  ]}
         />
       </Form.Item>
 
@@ -312,3 +309,4 @@ export default function CheckOutForm({ form, lensProducts, lensLoading }) {
     </Form>
   );
 }
+

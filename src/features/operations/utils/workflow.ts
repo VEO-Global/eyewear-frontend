@@ -1,10 +1,15 @@
 import type { OperationOrderResponse, OperationStatus } from "../types";
 
-export function getNextActionStatus(order: OperationOrderResponse): OperationStatus | null {
-  if (order.orderType === "PRE_ORDER" && order.status === "WAITING_FOR_STOCK") {
-    return "PACKING";
-  }
+export function getInitialOperationStatus(
+  order?: Pick<OperationOrderResponse, "orderType" | "prescriptionOption"> | null
+): OperationStatus {
+  const isPrescriptionOrder =
+    order?.orderType === "PRESCRIPTION" || order?.prescriptionOption === "WITH_PRESCRIPTION";
 
+  return isPrescriptionOrder ? "MANUFACTURING" : "PACKING";
+}
+
+export function getNextActionStatus(order: OperationOrderResponse): OperationStatus | null {
   if (order.status === "MANUFACTURING") {
     return "PACKING";
   }
@@ -22,10 +27,6 @@ export function getNextActionStatus(order: OperationOrderResponse): OperationSta
   }
 
   return null;
-}
-
-export function canReceiveStock(order?: OperationOrderResponse | null) {
-  return order?.orderType === "PRE_ORDER" && order?.status === "WAITING_FOR_STOCK";
 }
 
 export function canEditLogistics(order?: OperationOrderResponse | null) {

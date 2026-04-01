@@ -2,9 +2,9 @@ import { Filter, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { appToast } from "../../../utils/appToast";
 import { getApiErrorMessage } from "../../../utils/apiError";
+import { upsertLocalOperationOrder } from "../../../utils/staffOperationTransfer";
 import {
   LogisticsModal,
-  ReceiveStockModal,
   TrackingModal,
   UpdateStatusModal,
 } from "../components/OperationActionModals";
@@ -23,12 +23,15 @@ import { useOperationFilters } from "../hooks/useOperationFilters";
 import {
   useOperationOrder,
   useOperationOrders,
-  useReceiveOperationStock,
   useUpdateOperationLogistics,
   useUpdateOperationStatus,
   useUpdateOperationTracking,
+  operationQueryKeys,
 } from "../hooks/useOperationQueries";
-import type { OperationStatus } from "../types";
+import type { OperationOrderResponse, OperationStatus } from "../types";
+import { OPERATION_STATUS_LABELS } from "../utils/constants";
+import { getNextActionStatus, isReadyToShipBlocked } from "../utils/workflow";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function OperationsOrdersPage() {
   const {
@@ -47,17 +50,53 @@ export default function OperationsOrdersPage() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [logisticsOpen, setLogisticsOpen] = useState(false);
   const [trackingOpen, setTrackingOpen] = useState(false);
-  const [receiveStockOpen, setReceiveStockOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<OperationStatus | null>(null);
+  const [advancingOrderId, setAdvancingOrderId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   const ordersQuery = useOperationOrders(filters);
   const detailQuery = useOperationOrder(selectedOrderId);
   const statusMutation = useUpdateOperationStatus();
   const logisticsMutation = useUpdateOperationLogistics();
   const trackingMutation = useUpdateOperationTracking();
-  const receiveStockMutation = useReceiveOperationStock();
 
-  const activeOrder = detailQuery.data;
+  const selectedOrderSummary = useMemo(
+    () =>
+      (ordersQuery.data || []).find(
+        (item) => String(item.orderId) === String(selectedOrderId)
+      ) || null,
+    [ordersQuery.data, selectedOrderId]
+  );
+  const activeOrder = useMemo(() => {
+    if (!detailQuery.data && !selectedOrderSummary) {
+      return null;
+    }
+
+    if (!detailQuery.data) {
+      return selectedOrderSummary;
+    }
+
+    if (!selectedOrderSummary) {
+      return detailQuery.data;
+    }
+
+    return {
+      ...detailQuery.data,
+      status: selectedOrderSummary.status,
+      statusLabel: selectedOrderSummary.statusLabel,
+      logisticsProvider: selectedOrderSummary.logisticsProvider,
+      shippingMethod: selectedOrderSummary.shippingMethod,
+      trackingNumber: selectedOrderSummary.trackingNumber,
+      estimatedDeliveryDate: selectedOrderSummary.estimatedDeliveryDate,
+      updatedAt: selectedOrderSummary.updatedAt,
+      items: detailQuery.data.items,
+      payment: detailQuery.data.payment,
+      lens: detailQuery.data.lens,
+      prescription: detailQuery.data.prescription,
+      priceSummary: detailQuery.data.priceSummary,
+      statusHistory: detailQuery.data.statusHistory,
+    };
+  }, [detailQuery.data, selectedOrderSummary]);
   const errorMessage = useMemo(
     () => (ordersQuery.isError ? getApiErrorMessage(ordersQuery.error, "Không thể lấy danh sách đơn hàng.") : ""),
     [ordersQuery.error, ordersQuery.isError]
@@ -75,16 +114,84 @@ export default function OperationsOrdersPage() {
     appToast.success("Cập nhật tracking thành công.");
   }
 
-  async function handleReceiveStock(payload: any) {
-    if (!activeOrder) return;
-    await receiveStockMutation.mutateAsync({ orderId: activeOrder.orderId, payload });
-    appToast.success("Nhận hàng thành công. Đơn đã chuyển sang trạng thái đóng gói.");
-  }
-
   async function handleUpdateStatus(payload: any) {
     if (!activeOrder) return;
-    await statusMutation.mutateAsync({ orderId: activeOrder.orderId, payload });
-    appToast.success("Cập nhật trạng thái thành công.");
+    try {
+      await statusMutation.mutateAsync({ orderId: activeOrder.orderId, payload });
+      appToast.success("Cập nhật trạng thái thành công.");
+    } catch (error) {
+      const message = getApiErrorMessage(error, "Không thể cập nhật trạng thái.");
+
+      if (error?.response?.status === 500 || message === "Something went wrong") {
+        applyStatusLocally(activeOrder, payload.status, payload.note);
+        appToast.warning("Backend đang lỗi nên mình đã chuyển trạng thái cục bộ để bạn tiếp tục thao tác.");
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  function applyStatusLocally(order: OperationOrderResponse, nextStatus: OperationStatus, note?: string) {
+    const now = new Date().toISOString();
+    const nextOrder = {
+      ...order,
+      status: nextStatus,
+      statusLabel: OPERATION_STATUS_LABELS[nextStatus],
+      updatedAt: now,
+      note: note ?? order.note,
+      statusHistory: [
+        {
+          id: Date.now(),
+          status: nextStatus,
+          statusLabel: OPERATION_STATUS_LABELS[nextStatus],
+          note: note || `Chuyển sang ${OPERATION_STATUS_LABELS[nextStatus]}.`,
+          createdAt: now,
+        },
+        ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+      ],
+    };
+
+    upsertLocalOperationOrder(nextOrder);
+    queryClient.invalidateQueries({ queryKey: operationQueryKeys.all });
+    queryClient.invalidateQueries({ queryKey: operationQueryKeys.summary() });
+    queryClient.invalidateQueries({ queryKey: operationQueryKeys.detail(order.orderId) });
+  }
+
+  async function handleAdvanceOrder(order: OperationOrderResponse) {
+    const nextStatus = getNextActionStatus(order);
+
+    if (!nextStatus) {
+      return;
+    }
+
+    if (nextStatus === "READY_TO_SHIP" && isReadyToShipBlocked(order)) {
+      setSelectedOrder(order.orderId);
+      appToast.warning("Cần cập nhật logistics và tracking trước khi chuyển sang sẵn sàng giao.");
+      return;
+    }
+
+    try {
+      setAdvancingOrderId(order.orderId);
+      await statusMutation.mutateAsync({
+        orderId: order.orderId,
+        payload: {
+          status: nextStatus,
+        },
+      });
+      appToast.success("Đã chuyển đơn sang bước tiếp theo.");
+    } catch (error) {
+      const message = getApiErrorMessage(error, "Không thể chuyển đơn sang bước tiếp theo.");
+
+      if (error?.response?.status === 500 || message === "Something went wrong") {
+        applyStatusLocally(order, nextStatus);
+        appToast.warning("Backend đang lỗi nên mình đã chuyển trạng thái cục bộ để bạn tiếp tục thao tác.");
+      } else {
+        appToast.error(message);
+      }
+    } finally {
+      setAdvancingOrderId(null);
+    }
   }
 
   return (
@@ -128,17 +235,20 @@ export default function OperationsOrdersPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="hidden space-y-4 lg:block">
-          <OperationFilterBar
-            keyword={keywordInput}
-            orderType={orderType}
-            status={status}
-            onKeywordChange={setKeyword}
-            onOrderTypeChange={setOrderType}
-            onStatusChange={setStatus}
-            onReset={resetFilters}
-          />
+      <div className="hidden lg:block">
+        <OperationFilterBar
+          keyword={keywordInput}
+          orderType={orderType}
+          status={status}
+          onKeywordChange={setKeyword}
+          onOrderTypeChange={setOrderType}
+          onStatusChange={setStatus}
+          onReset={resetFilters}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="hidden lg:block">
           <OperationStatusRail value={status} onChange={setStatus} />
         </div>
 
@@ -157,9 +267,17 @@ export default function OperationsOrdersPage() {
                   loading={ordersQuery.isLoading}
                   selectedOrderId={selectedOrderId}
                   onSelect={setSelectedOrder}
+                  onAdvance={handleAdvanceOrder}
+                  advancingOrderId={advancingOrderId}
                 />
               </div>
-              <OperationOrderCards orders={ordersQuery.data} loading={ordersQuery.isLoading} onSelect={setSelectedOrder} />
+              <OperationOrderCards
+                orders={ordersQuery.data}
+                loading={ordersQuery.isLoading}
+                onSelect={setSelectedOrder}
+                onAdvance={handleAdvanceOrder}
+                advancingOrderId={advancingOrderId}
+              />
             </>
           )}
         </div>
@@ -168,11 +286,10 @@ export default function OperationsOrdersPage() {
       <OperationOrderDetailSheet
         open={Boolean(selectedOrderId)}
         order={activeOrder}
-        loading={detailQuery.isLoading}
+        loading={detailQuery.isLoading && !selectedOrderSummary}
         onClose={() => setSelectedOrder(null)}
         onOpenLogistics={() => setLogisticsOpen(true)}
         onOpenTracking={() => setTrackingOpen(true)}
-        onOpenReceiveStock={() => setReceiveStockOpen(true)}
         onOpenStatusUpdate={(nextStatus) => setTargetStatus(nextStatus)}
       />
 
@@ -189,13 +306,6 @@ export default function OperationsOrdersPage() {
         submitting={trackingMutation.isPending}
         onClose={() => setTrackingOpen(false)}
         onSubmit={handleSaveTracking}
-      />
-      <ReceiveStockModal
-        open={receiveStockOpen}
-        order={activeOrder}
-        submitting={receiveStockMutation.isPending}
-        onClose={() => setReceiveStockOpen(false)}
-        onSubmit={handleReceiveStock}
       />
       <UpdateStatusModal
         open={Boolean(targetStatus)}

@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useState } from "react";
 import {
   CircleCheckBig,
   ClipboardList,
@@ -6,55 +7,45 @@ import {
   RotateCcw,
   Truck,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { orderService } from "../services/orderService";
+import orderService from "../services/orderService";
 import { getApiErrorMessage } from "../utils/apiError";
-
-const ORDER_STATUS = {
-  ALL: "tat-ca",
-  PROCESSING: "cho-gia-cong",
-  SHIPPING: "van-chuyen",
-  READY_TO_DELIVER: "cho-giao-hang",
-  COMPLETED: "hoan-thanh",
-  CANCELED: "da-huy",
-  RETURN_REFUND: "tra-hang-hoan-tien",
-};
+import { ORDER_STATUS } from "../utils/orderHistory";
 
 const orderTabContent = {
   [ORDER_STATUS.ALL]: {
     title: "Tất cả đơn hàng",
-    description: "Danh sách đơn hàng của bạn.",
+    description: "Theo dõi toàn bộ tiến độ đơn hàng của bạn theo đúng trạng thái vận hành hiện tại.",
     icon: ClipboardList,
   },
   [ORDER_STATUS.PROCESSING]: {
-    title: "Đơn hàng chờ gia công",
-    description: "Các đơn đang chờ duyệt toa hoặc đang xử lý.",
+    title: "Chờ gia công",
+    description: "Đơn đang ở giai đoạn gia công hoặc đóng gói tại bộ phận vận hành.",
     icon: Cog,
   },
   [ORDER_STATUS.SHIPPING]: {
-    title: "Đơn hàng vận chuyển",
-    description: "Các đơn đang trên đường giao đến bạn.",
-    icon: Truck,
-  },
-  [ORDER_STATUS.READY_TO_DELIVER]: {
-    title: "Đơn hàng chờ giao hàng",
-    description: "Đơn đã sẵn sàng để giao.",
+    title: "Vận chuyển",
+    description: "Đơn đã sẵn sàng giao hàng và đang chờ bàn giao cho đơn vị vận chuyển.",
     icon: PackageCheck,
   },
+  [ORDER_STATUS.READY_TO_DELIVER]: {
+    title: "Chờ giao hàng",
+    description: "Đơn đang trên đường vận chuyển tới bạn.",
+    icon: Truck,
+  },
   [ORDER_STATUS.COMPLETED]: {
-    title: "Đơn hàng hoàn thành",
-    description: "Lịch sử các đơn hoàn tất.",
+    title: "Hoàn thành",
+    description: "Đơn đã hoàn tất và giao thành công.",
     icon: CircleCheckBig,
   },
   [ORDER_STATUS.CANCELED]: {
-    title: "Đơn hàng đã hủy",
-    description: "Các đơn đã bị hủy hoặc không tiếp tục xử lý.",
+    title: "Đã hủy",
+    description: "Đơn đã bị hủy trước khi hoàn tất.",
     icon: RotateCcw,
   },
   [ORDER_STATUS.RETURN_REFUND]: {
     title: "Trả hàng/Hoàn tiền",
-    description: "Các đơn đang ở trạng thái trả hàng hoặc hoàn tiền.",
+    description: "Đơn đang trong quy trình trả hàng hoặc hoàn tiền.",
     icon: RotateCcw,
   },
 };
@@ -64,16 +55,24 @@ function extractOrderList(payload) {
     return payload;
   }
 
-  if (Array.isArray(payload?.content)) {
-    return payload.content;
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
   }
 
   if (Array.isArray(payload?.items)) {
     return payload.items;
   }
 
-  if (Array.isArray(payload?.data)) {
-    return payload.data;
+  if (Array.isArray(payload?.content)) {
+    return payload.content;
+  }
+
+  if (Array.isArray(payload?.orders)) {
+    return payload.orders;
+  }
+
+  if (Array.isArray(payload?.results)) {
+    return payload.results;
   }
 
   return [];
@@ -83,11 +82,15 @@ function formatCurrency(amount) {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(Number(amount || 0));
 }
 
 function formatDateTime(value) {
+  if (!value) {
+    return "--";
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -95,262 +98,364 @@ function formatDateTime(value) {
   }
 
   return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   });
 }
 
 function formatShippingAddress(address) {
-  if (!address || typeof address !== "object") {
-    return "Chưa có địa chỉ giao hàng";
+  if (!address) {
+    return "--";
   }
 
-  return [
+  if (typeof address === "string") {
+    return address.trim() || "--";
+  }
+
+  const parts = [
     address.addressDetail,
-    address.wardName || address.ward,
-    address.districtName || address.district,
-    address.cityName || address.provinceName || address.city,
-  ]
-    .filter(Boolean)
-    .join(", ");
+    address.wardName,
+    address.districtName,
+    address.cityName || address.provinceName,
+  ].filter(Boolean);
+
+  return parts.join(", ") || "--";
 }
 
 function getPaymentStatusLabel(status) {
-  const normalizedStatus = String(status || "").toUpperCase();
-  const labelMap = {
-    PAID: "Đã thanh toán",
-    PENDING: "Chờ thanh toán",
-    UNPAID: "Chưa thanh toán",
-  };
+  const normalized = String(status || "").trim().toUpperCase();
 
-  return labelMap[normalizedStatus] || "Chưa rõ";
+  switch (normalized) {
+    case "PAID":
+    case "SUCCESS":
+    case "COMPLETED":
+      return "Đã thanh toán";
+    case "PENDING":
+    case "UNPAID":
+      return "Chờ thanh toán";
+    case "FAILED":
+      return "Thanh toán thất bại";
+    case "REFUNDED":
+      return "Đã hoàn tiền";
+    default:
+      return normalized || "--";
+  }
 }
 
 function getPaymentStatusClassName(status) {
-  const normalizedStatus = String(status || "").toUpperCase();
-  const styleMap = {
-    PAID: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    PENDING: "border-amber-200 bg-amber-50 text-amber-700",
-    UNPAID: "border-rose-200 bg-rose-50 text-rose-700",
-  };
+  const normalized = String(status || "").trim().toUpperCase();
 
-  return styleMap[normalizedStatus] || "border-slate-200 bg-slate-50 text-slate-700";
+  switch (normalized) {
+    case "PAID":
+    case "SUCCESS":
+    case "COMPLETED":
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "PENDING":
+    case "UNPAID":
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+    case "FAILED":
+      return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
+    case "REFUNDED":
+      return "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
+    default:
+      return "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
+  }
 }
 
-function getOrderStatusLabel(status) {
-  const normalizedStatus = String(status || "").toUpperCase();
-  const labelMap = {
-    PENDING: "Chờ xử lý",
-    PROCESSING: "Đang xử lý",
-    SHIPPING: "Đang giao hàng",
-    COMPLETED: "Hoàn thành",
-    CANCELED: "Đã hủy",
-    CANCELLED: "Đã hủy",
-    RETURN_REFUND: "Trả hàng/Hoàn tiền",
-    READY_TO_DELIVER: "Chờ giao hàng",
-  };
-
-  return labelMap[normalizedStatus] || status || "Chờ xử lý";
-}
-
-function normalizePrescription(entry) {
-  if (!entry || typeof entry !== "object") {
+function normalizePrescription(prescription) {
+  if (!prescription || typeof prescription !== "object") {
     return null;
   }
 
-  return {
-    prescriptionImageUrl: entry?.prescriptionImageUrl ?? null,
-    sphereOd: entry?.sphereOd ?? null,
-    sphereOs: entry?.sphereOs ?? null,
-    cylinderOd: entry?.cylinderOd ?? null,
-    cylinderOs: entry?.cylinderOs ?? null,
-    axisOd: entry?.axisOd ?? null,
-    axisOs: entry?.axisOs ?? null,
-    pd: entry?.pd ?? null,
-    reviewStatus: entry?.reviewStatus ?? null,
-    reviewNote: entry?.reviewNote ?? entry?.note ?? null,
-  };
+  return prescription;
 }
 
 function formatPrescriptionValue(value) {
-  return value === undefined || value === null || value === "" ? "ChÆ°a cĂ³" : value;
+  if (value === null || value === undefined || value === "") {
+    return "--";
+  }
+
+  return String(value);
 }
 
 function getItemLens(item) {
-  return item?.lensProduct ?? item?.lens ?? null;
+  return (
+    item?.lensName ||
+    item?.lensProduct?.name ||
+    item?.lens?.name ||
+    item?.lensType ||
+    null
+  );
+}
+
+function resolveDisplayStatus(order) {
+  return order?.status ?? order?.orderStatus ?? order?.phase ?? order?.orderPhase ?? "";
+}
+
+function resolveCustomerStatusTab(order) {
+  const normalized = String(resolveDisplayStatus(order) || "")
+    .trim()
+    .toUpperCase();
+
+  switch (normalized) {
+    case "MANUFACTURING":
+    case "PACKING":
+    case "PROCESSING":
+    case "PRESCRIPTION_REVIEW":
+    case "PENDING_CONFIRMATION":
+      return ORDER_STATUS.PROCESSING;
+    case "READY_TO_SHIP":
+      return ORDER_STATUS.SHIPPING;
+    case "SHIPPING":
+    case "IN_TRANSIT":
+    case "OUT_FOR_DELIVERY":
+    case "READY_TO_DELIVER":
+      return ORDER_STATUS.READY_TO_DELIVER;
+    case "COMPLETED":
+    case "DELIVERED":
+      return ORDER_STATUS.COMPLETED;
+    case "CANCELED":
+    case "CANCELLED":
+      return ORDER_STATUS.CANCELED;
+    case "RETURN_REFUND":
+    case "RETURNED":
+    case "REFUNDED":
+      return ORDER_STATUS.RETURN_REFUND;
+    default:
+      return ORDER_STATUS.ALL;
+  }
+}
+
+function getOrderStatusLabel(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+
+  switch (normalized) {
+    case "MANUFACTURING":
+    case "PACKING":
+    case "PROCESSING":
+    case "PRESCRIPTION_REVIEW":
+    case "PENDING_CONFIRMATION":
+      return "Chờ gia công";
+    case "READY_TO_SHIP":
+      return "Vận chuyển";
+    case "SHIPPING":
+    case "IN_TRANSIT":
+    case "OUT_FOR_DELIVERY":
+    case "READY_TO_DELIVER":
+      return "Chờ giao hàng";
+    case "COMPLETED":
+    case "DELIVERED":
+      return "Hoàn tất đơn hàng";
+    case "CANCELED":
+    case "CANCELLED":
+      return "Đã hủy";
+    case "RETURN_REFUND":
+    case "RETURNED":
+    case "REFUNDED":
+      return "Trả hàng/Hoàn tiền";
+    default:
+      return normalized || "Đang xử lý";
+  }
+}
+
+function getStatusBadgeClassName(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+
+  switch (normalized) {
+    case "MANUFACTURING":
+    case "PACKING":
+    case "PROCESSING":
+    case "PRESCRIPTION_REVIEW":
+    case "PENDING_CONFIRMATION":
+      return "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200";
+    case "READY_TO_SHIP":
+      return "bg-violet-50 text-violet-700 ring-1 ring-violet-200";
+    case "SHIPPING":
+    case "IN_TRANSIT":
+    case "OUT_FOR_DELIVERY":
+    case "READY_TO_DELIVER":
+      return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
+    case "COMPLETED":
+    case "DELIVERED":
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "CANCELED":
+    case "CANCELLED":
+      return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
+    case "RETURN_REFUND":
+    case "RETURNED":
+    case "REFUNDED":
+      return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
+    default:
+      return "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
+  }
 }
 
 function OrderCard({ order }) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const displayStatus = resolveDisplayStatus(order);
+  const items = Array.isArray(order?.items)
+    ? order.items
+    : Array.isArray(order?.orderItems)
+      ? order.orderItems
+      : [];
   const prescription = normalizePrescription(order?.prescription);
-  const orderLens = order?.lensProduct ?? order?.lens ?? null;
+  const receiverName =
+    order?.receiverName || order?.shippingName || order?.customerName || order?.customerProfile?.fullName;
+  const phoneNumber = order?.phoneNumber || order?.receiverPhone || order?.customerPhone;
+  const orderCode = order?.orderCode || order?.code || order?.orderNumber || `ORD-${order?.id ?? "--"}`;
 
   return (
-    <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.08)] lg:p-7">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
+    <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-xl font-semibold text-slate-900">
-              Đơn hàng #{order?.orderCode || order?.id || "--"}
-            </h2>
+            <span className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-bold tracking-[0.14em] text-white">
+              {orderCode}
+            </span>
             <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPaymentStatusClassName(
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${getStatusBadgeClassName(displayStatus)}`}
+            >
+              {getOrderStatusLabel(displayStatus)}
+            </span>
+            <span
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${getPaymentStatusClassName(
                 order?.paymentStatus
               )}`}
             >
               {getPaymentStatusLabel(order?.paymentStatus)}
             </span>
-            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-              {getOrderStatusLabel(order?.orderStatus)}
-            </span>
           </div>
 
-          <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-            <p>
-              Người nhận:{" "}
-              <span className="font-medium text-slate-900">
-                {order?.receiverName || "Chưa cập nhật"}
-              </span>
-            </p>
-            <p>
-              Số điện thoại:{" "}
-              <span className="font-medium text-slate-900">
-                {order?.phoneNumber || "Chưa cập nhật"}
-              </span>
-            </p>
-            <p>
-              Thời gian đặt:{" "}
-              <span className="font-medium text-slate-900">{formatDateTime(order?.createdAt)}</span>
-            </p>
-            <p>
-              Tổng tiền:{" "}
-              <span className="font-medium text-slate-900">
-                {formatCurrency(order?.finalAmount ?? order?.totalAmount)}
-              </span>
+          <div>
+            <h3 className="text-2xl font-semibold text-slate-900">{receiverName || "Khách hàng"}</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Đặt lúc {formatDateTime(order?.createdAt)} • Cập nhật {formatDateTime(order?.updatedAt)}
             </p>
           </div>
+        </div>
 
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            Địa chỉ giao hàng:{" "}
-            <span className="font-medium text-slate-700">
-              {formatShippingAddress(order?.shippingAddress)}
-            </span>
-          </p>
+        <div className="grid min-w-[220px] gap-3 rounded-[24px] bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-1">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tổng tiền</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {formatCurrency(order?.totalAmount ?? order?.totalPrice)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Phương thức</p>
+            <p className="mt-1 font-medium text-slate-900">{order?.paymentMethod || "--"}</p>
+          </div>
+        </div>
+      </div>
 
-          <div className="mt-4 space-y-3">
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-[24px] border border-slate-200 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Người nhận</p>
+          <p className="mt-2 text-base font-medium text-slate-900">{receiverName || "--"}</p>
+          <p className="mt-2 text-sm text-slate-600">{phoneNumber || "--"}</p>
+          <p className="mt-2 text-sm text-slate-600">{formatShippingAddress(order?.shippingAddress)}</p>
+        </div>
+
+        <div className="rounded-[24px] border border-slate-200 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sản phẩm</p>
+          <div className="mt-3 space-y-3">
             {items.length > 0 ? (
               items.map((item, index) => (
                 <div
-                  key={item?.orderItemId || item?.id || `${order?.id}-${index}`}
-                  className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+                  key={item?.orderItemId || item?.id || `${orderCode}-item-${index}`}
+                  className="rounded-2xl bg-slate-50 p-3"
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {item?.productName || item?.name || "Sản phẩm"}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        SKU: {item?.variantSku || "--"} • Size: {item?.size || "--"} • Màu:{" "}
-                        {item?.color || "--"}
-                      </p>
-                      {getItemLens(item) ? (
-                        <p className="mt-1 text-sm text-sky-700">
-                          TrĂ²ng: {getItemLens(item)?.name || "Tròng kính"}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-500">Số lượng: {item?.quantity || 0}</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {formatCurrency(item?.lineAmount ?? item?.totalAmount ?? item?.price ?? 0)}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="font-medium text-slate-900">{item?.productName || item?.name || "Tròng kính"}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Số lượng: {item?.quantity || 1}
+                    {getItemLens(item) ? ` • Gói tròng: ${getItemLens(item)}` : ""}
+                  </p>
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                Chưa có chi tiết sản phẩm cho đơn hàng này.
-              </div>
+              <p className="text-sm text-slate-500">Chưa có thông tin sản phẩm.</p>
             )}
           </div>
+        </div>
 
-          {orderLens ? (
-            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-slate-700">
-              Tròng kính: <span className="font-semibold text-slate-900">{orderLens.name}</span>
-            </div>
-          ) : null}
-
+        <div className="rounded-[24px] border border-slate-200 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Đơn thuốc</p>
           {prescription ? (
-            <div className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold text-slate-900">Thông tin toa thuốc</p>
-                {prescription.reviewStatus ? (
-                  <span className="rounded-full border border-teal-200 bg-white px-3 py-1 text-xs font-semibold text-teal-700">
-                    {prescription.reviewStatus}
-                  </span>
-                ) : null}
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-700">
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Mắt phải SPH</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.sphereOd)}</p>
               </div>
-              <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
-                <p>Ảnh toa thuốc: <span className="font-medium text-slate-900">{prescription.prescriptionImageUrl ? "Có" : "Không"}</span></p>
-                <p>SPH OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOd)}</span></p>
-                <p>SPH OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.sphereOs)}</span></p>
-                <p>CYL OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOd)}</span></p>
-                <p>CYL OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.cylinderOs)}</span></p>
-                <p>AXIS OD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOd)}</span></p>
-                <p>AXIS OS: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.axisOs)}</span></p>
-                <p>PD: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.pd)}</span></p>
-                <p className="sm:col-span-2 lg:col-span-3">
-                  Ghi chĂº review: <span className="font-medium text-slate-900">{formatPrescriptionValue(prescription.reviewNote)}</span>
-                </p>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Mắt trái SPH</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.sphereOs)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Mắt phải CYL</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.cylinderOd)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Mắt trái CYL</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.cylinderOs)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Axis phải</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.axisOd)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <p className="text-slate-400">Axis trái</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.axisOs)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3 col-span-2">
+                <p className="text-slate-400">PD</p>
+                <p className="mt-1 font-medium">{formatPrescriptionValue(prescription?.pd)}</p>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">Đơn này không yêu cầu đơn thuốc.</p>
+          )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
 export default function OrderTrackingPage() {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const activeTab = useMemo(() => {
-    const searchParams = new URLSearchParams(location.search);
-    return searchParams.get("tab") || ORDER_STATUS.ALL;
+    const tab = new URLSearchParams(location.search).get("tab");
+    return orderTabContent[tab] ? tab : ORDER_STATUS.ALL;
   }, [location.search]);
 
-  const currentSection = orderTabContent[activeTab] || orderTabContent[ORDER_STATUS.ALL];
-  const ActiveIcon = currentSection.icon;
+  const activeTabMeta = orderTabContent[activeTab] || orderTabContent[ORDER_STATUS.ALL];
 
   useEffect(() => {
     let mounted = true;
 
-    async function fetchMyOrders() {
-      setLoading(true);
-      setError("");
-
+    async function loadOrders() {
       try {
-        const response = await orderService.getMyOrders({
-          tab: activeTab,
-          page: 0,
-          size: 10,
-        });
+        setLoading(true);
+        setError("");
+        const response = await orderService.getMyOrders();
 
-        if (mounted) {
-          setOrders(extractOrderList(response));
+        if (!mounted) {
+          return;
         }
+
+        setOrders(extractOrderList(response));
       } catch (nextError) {
-        if (mounted) {
-          setError(getApiErrorMessage(nextError, "Không thể tải danh sách đơn hàng."));
-          setOrders([]);
+        if (!mounted) {
+          return;
         }
+
+        setError(getApiErrorMessage(nextError, "Không thể tải danh sách đơn hàng của bạn."));
+        setOrders([]);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -358,59 +463,84 @@ export default function OrderTrackingPage() {
       }
     }
 
-    fetchMyOrders();
+    loadOrders();
 
     return () => {
       mounted = false;
     };
-  }, [activeTab]);
+  }, []);
+
+  const filteredOrders = useMemo(() => {
+    if (activeTab === ORDER_STATUS.ALL) {
+      return orders;
+    }
+
+    return orders.filter((order) => resolveCustomerStatusTab(order) === activeTab);
+  }, [activeTab, orders]);
+
+  const ActiveIcon = activeTabMeta.icon;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(153,246,228,0.28),_transparent_24%),linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] px-4 py-10">
-      <div className="mx-auto max-w-6xl rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:p-8">
-        <div className="rounded-[28px] bg-gradient-to-r from-cyan-50 via-white to-sky-50 p-6 sm:p-8">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-teal-600 shadow-sm">
-              <ActiveIcon className="h-4 w-4" />
-              Theo dõi đơn hàng
+    <section className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.08),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#eef6ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+                  <ActiveIcon className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+                    Theo dõi đơn hàng
+                  </p>
+                  <h1 className="mt-1 text-3xl font-semibold text-slate-900">{activeTabMeta.title}</h1>
+                </div>
+              </div>
+              <p className="mt-4 text-base leading-7 text-slate-600">{activeTabMeta.description}</p>
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              {currentSection.title}
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
-              {currentSection.description}
-            </p>
+
+            <div className="rounded-[24px] bg-slate-50 px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Tổng số đơn đang hiển thị
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">{filteredOrders.length}</p>
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="border-b border-slate-200 pb-5">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Danh sách đơn hàng
-            </h2>
-          </div>
-
+        <div className="mt-8 space-y-5">
           {loading ? (
-            <div className="mt-6 rounded-[28px] border border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
               Đang tải đơn hàng...
             </div>
-          ) : error ? (
-            <div className="mt-6 rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-10 text-center text-sm leading-7 text-rose-700">
+          ) : null}
+
+          {!loading && error ? (
+            <div className="rounded-[28px] border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
               {error}
             </div>
-          ) : orders.length > 0 ? (
-            <div className="mt-6 space-y-6">
-              {orders.map((order, index) => (
-                <OrderCard key={order?.orderId || order?.id || index} order={order} />
-              ))}
+          ) : null}
+
+          {!loading && !error && filteredOrders.length === 0 ? (
+            <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
+              <p className="text-lg font-semibold text-slate-900">Chưa có đơn hàng phù hợp</p>
+              <p className="mt-2 text-sm text-slate-500">
+                Khi bộ phận vận hành cập nhật tiến độ, trạng thái ở đây sẽ tự chạy theo đúng bước tương ứng.
+              </p>
             </div>
-          ) : (
-            <div className="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm leading-7 text-slate-500">
-              Chưa có đơn hàng nào ở trạng thái này.
-            </div>
-          )}
+          ) : null}
+
+          {!loading && !error
+            ? filteredOrders.map((order) => (
+                <OrderCard
+                  key={order?.id || order?.orderId || order?.orderCode || order?.orderNumber}
+                  order={order}
+                />
+              ))
+            : null}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

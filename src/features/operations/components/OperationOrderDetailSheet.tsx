@@ -17,7 +17,6 @@ import { buildFullAddress, formatCurrency, formatDate, formatDateTime } from "..
 import {
   canEditLogistics,
   canEditTracking,
-  canReceiveStock,
   getNextActionStatus,
   isReadyToShipBlocked,
 } from "../utils/workflow";
@@ -84,7 +83,6 @@ export function OperationOrderDetailSheet({
   onClose,
   onOpenLogistics,
   onOpenTracking,
-  onOpenReceiveStock,
   onOpenStatusUpdate,
 }: {
   open: boolean;
@@ -93,7 +91,6 @@ export function OperationOrderDetailSheet({
   onClose: () => void;
   onOpenLogistics: () => void;
   onOpenTracking: () => void;
-  onOpenReceiveStock: () => void;
   onOpenStatusUpdate: (targetStatus: OperationStatus) => void;
 }) {
   const nextStatus = useMemo(() => (order ? getNextActionStatus(order) : null), [order]);
@@ -144,12 +141,6 @@ export function OperationOrderDetailSheet({
               Thao tác vận hành
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-              {canReceiveStock(order) ? (
-                <ActionButton onClick={onOpenReceiveStock}>
-                  <Archive className="h-4 w-4" />
-                  Xác nhận nhận hàng
-                </ActionButton>
-              ) : null}
               {canEditLogistics(order) ? (
                 <ActionButton variant="secondary" onClick={onOpenLogistics}>
                   <Truck className="h-4 w-4" />

@@ -331,7 +331,7 @@ export function UpdateStatusModal({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!targetStatus || targetStatus === "WAITING_FOR_STOCK") {
+    if (!targetStatus) {
       appToast.error("Trạng thái đích không hợp lệ.");
       return;
     }
@@ -357,11 +357,11 @@ export function UpdateStatusModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Trạng thái hiện tại</p>
+            <p className="text-sm font-medium text-slate-700">Trạng thái hiện tại</p>
             <p className="mt-2 text-lg font-semibold text-slate-900">{order?.status ? OPERATION_STATUS_LABELS[order.status as OperationStatus] || order.status : "--"}</p>
           </div>
           <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-4">
-            <p className="text-sm text-cyan-700">Trạng thái đích</p>
+            <p className="text-sm font-medium text-slate-800">Trạng thái đích</p>
             <p className="mt-2 text-lg font-semibold text-slate-950">{targetStatus ? OPERATION_STATUS_LABELS[targetStatus] : "--"}</p>
           </div>
         </div>

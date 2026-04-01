@@ -1,7 +1,6 @@
 export type OperationOrderType = "NORMAL" | "PRE_ORDER" | "PRESCRIPTION";
 
 export type OperationStatus =
-  | "WAITING_FOR_STOCK"
   | "MANUFACTURING"
   | "PACKING"
   | "READY_TO_SHIP"

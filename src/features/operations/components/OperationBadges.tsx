@@ -6,7 +6,6 @@ import {
 import { cn } from "../utils/format";
 
 const statusStyles: Record<string, string> = {
-  WAITING_FOR_STOCK: "border-amber-200 bg-amber-50 text-amber-800",
   MANUFACTURING: "border-violet-200 bg-violet-50 text-violet-800",
   PACKING: "border-orange-200 bg-orange-50 text-orange-800",
   READY_TO_SHIP: "border-cyan-200 bg-cyan-50 text-cyan-800",

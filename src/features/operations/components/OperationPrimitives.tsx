@@ -60,9 +60,9 @@ export function ActionButton({
 }) {
   const variantStyles = {
     primary:
-      "border border-cyan-200 bg-[linear-gradient(180deg,#ecfeff_0%,#cffafe_100%)] text-slate-950 shadow-[0_10px_24px_rgba(34,211,238,0.18)] hover:bg-[linear-gradient(180deg,#dffafe_0%,#bae6fd_100%)]",
-    secondary: "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100",
+      "border border-cyan-300 bg-[linear-gradient(180deg,#dff9ff_0%,#bff4ff_100%)] !text-black shadow-[0_10px_24px_rgba(34,211,238,0.18)] hover:bg-[linear-gradient(180deg,#d2f5ff_0%,#a5ecff_100%)]",
+    secondary: "border border-slate-200 bg-white !text-black hover:bg-slate-50",
+    ghost: "bg-transparent !text-black hover:bg-slate-100",
     danger: "bg-rose-600 text-white hover:bg-rose-500",
   };
 
@@ -75,7 +75,7 @@ export function ActionButton({
     <button
       {...props}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:shrink-0",
+        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:!text-black [&_svg]:shrink-0",
         variantStyles[variant],
         sizeStyles[size],
         className
@@ -95,7 +95,7 @@ export function TextInput({
     <input
       {...props}
       className={cn(
-        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
+        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm !text-black caret-black outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
         className
       )}
     />
@@ -110,7 +110,7 @@ export function TextArea({
     <textarea
       {...props}
       className={cn(
-        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
+        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm !text-black caret-black outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
         className
       )}
     />
@@ -126,7 +126,7 @@ export function SelectInput({
     <select
       {...props}
       className={cn(
-        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
+        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm !text-black outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100",
         className
       )}
     >
@@ -190,7 +190,7 @@ export function OverlayModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
             <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
-            {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+            {description ? <p className="mt-1 text-sm text-slate-700">{description}</p> : null}
           </div>
           <button
             type="button"

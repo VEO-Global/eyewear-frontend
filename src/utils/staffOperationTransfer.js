@@ -1,3 +1,5 @@
+import { OPERATION_STATUS_LABELS } from "../features/operations/utils/constants";
+import { getInitialOperationStatus } from "../features/operations/utils/workflow";
 import { ORDER_PHASE, formatCurrency } from "./orderHistory";
 
 const STAFF_HANDOFF_QUEUE_KEY = "staff-handoff-local-queue";
@@ -141,6 +143,11 @@ export function createLocalOperationOrder(order) {
   const updatedAt = new Date().toISOString();
   const requiresPrescription = Boolean(order?.requiresPrescription);
   const orderType = requiresPrescription ? "PRESCRIPTION" : "NORMAL";
+  const prescriptionOption = order?.prescriptionOption ?? (requiresPrescription ? "WITH_PRESCRIPTION" : "WITHOUT_PRESCRIPTION");
+  const initialStatus = getInitialOperationStatus({
+    orderType,
+    prescriptionOption,
+  });
   const receiverName = order?.receiverName ?? order?.customer ?? "Khách hàng";
   const phoneNumber = order?.phoneNumber ?? order?.customerPhone ?? "";
   const shippingAddress =
@@ -160,12 +167,12 @@ export function createLocalOperationOrder(order) {
     orderCode: order?.orderCode ?? order?.code ?? `ORD-${orderId}`,
     paymentMethod: order?.paymentMethod ?? null,
     customerEmail: order?.customerEmail ?? "",
-    status: "WAITING_FOR_STOCK",
+    status: initialStatus,
     orderStatus: "PENDING_VERIFICATION",
-    statusLabel: "Chờ nhận hàng",
+    statusLabel: OPERATION_STATUS_LABELS[initialStatus],
     customerTab: null,
     orderType,
-    prescriptionOption: order?.prescriptionOption ?? (requiresPrescription ? "WITH_PRESCRIPTION" : "WITHOUT_PRESCRIPTION"),
+    prescriptionOption,
     prescriptionReviewStatus: order?.prescription?.reviewStatus ?? order?.prescriptionReviewStatus ?? null,
     totalAmount: Number(order?.totalAmount ?? 0),
     subtotal: Number(order?.totalAmount ?? 0),
@@ -220,9 +227,12 @@ export function createLocalOperationOrder(order) {
     statusHistory: [
       {
         id: Date.now(),
-        status: "WAITING_FOR_STOCK",
-        statusLabel: "Chờ nhận hàng",
-        note: "Đơn được staff bàn giao sang vận hành.",
+        status: initialStatus,
+        statusLabel: OPERATION_STATUS_LABELS[initialStatus],
+        note:
+          initialStatus === "MANUFACTURING"
+            ? "Đơn có toa được staff bàn giao sang vận hành và chuyển vào giai đoạn gia công."
+            : "Đơn không có toa được staff bàn giao sang vận hành và chuyển thẳng vào giai đoạn đóng gói.",
         createdAt: updatedAt,
       },
     ],
@@ -240,7 +250,7 @@ export function createLocalOperationOrder(order) {
       unitPrice: Number(item?.unitPrice ?? item?.variantPrice ?? item?.price ?? 0),
       lineTotal: Number(
         item?.lineTotal ??
-          (Number(item?.quantity ?? 1) * Number(item?.variantPrice ?? item?.price ?? 0))
+          Number(item?.quantity ?? 1) * Number(item?.variantPrice ?? item?.price ?? 0)
       ),
       price: Number(item?.price ?? item?.variantPrice ?? 0),
       thumbnailUrl: item?.thumbnailUrl ?? null,

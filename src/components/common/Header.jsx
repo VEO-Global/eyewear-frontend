@@ -254,10 +254,13 @@ export function Header() {
     setDropDownMenu(!curr);
   }
 
-  function handleLogout() {
-    dispatch(softLogout());
-    appToast.success("Đăng xuất thành công");
-    navigate("/");
+  async function handleLogout() {
+    try {
+      await dispatch(softLogout()).unwrap();
+    } finally {
+      appToast.success("Đăng xuất thành công");
+      navigate("/", { replace: true });
+    }
   }
 
   function handleNavigateItem(item) {

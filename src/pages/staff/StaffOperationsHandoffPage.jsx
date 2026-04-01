@@ -1,8 +1,10 @@
 import { Alert, Spin } from "antd";
 import { PackageCheck, Send, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import StaffWorkspaceLayout from "../../components/staff/StaffWorkspaceLayout";
+import { operationQueryKeys } from "../../features/operations/hooks/useOperationQueries";
 import { extractErrorMessage } from "../../services/managerApi";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { formatCurrency } from "../../utils/orderHistory";
@@ -184,6 +186,7 @@ function OrderDetailModal({ order, loading, onClose }) {
 
 export default function StaffOperationsHandoffPage() {
   const location = useLocation();
+  const queryClient = useQueryClient();
   const storedHighlight = (() => {
     try {
       const raw = sessionStorage.getItem(STAFF_HIGHLIGHTED_ORDER_KEY);
@@ -265,6 +268,9 @@ export default function StaffOperationsHandoffPage() {
       markHandedOffOperationOrder(order.id);
       removeLocalReadyForHandoffOrder(order.id);
       upsertLocalOperationOrder(createLocalOperationOrder(order));
+      queryClient.invalidateQueries({ queryKey: operationQueryKeys.all });
+      queryClient.invalidateQueries({ queryKey: operationQueryKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: ["operation-order"] });
       setOrders((currentOrders) => currentOrders.filter((item) => String(item.id) !== String(order.id)));
       appToast.success(`Đã bàn giao đơn ${order.code} cho Operation`);
       setActingOrderId(null);

@@ -13,7 +13,6 @@ function sanitizeOrderType(value: string | null): OperationOrderType | "" {
 
 function sanitizeStatus(value: string | null): OperationStatus | "" {
   if (
-    value === "WAITING_FOR_STOCK" ||
     value === "MANUFACTURING" ||
     value === "PACKING" ||
     value === "READY_TO_SHIP" ||
