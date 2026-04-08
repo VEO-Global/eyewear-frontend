@@ -24,12 +24,12 @@ export function OperationStatusRail({
               className={cn(
                 "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium transition",
                 active
-                  ? "bg-slate-950 !text-white shadow-lg ring-1 ring-cyan-400/30"
+                  ? "border border-sky-200 bg-white text-slate-950 shadow-[0_12px_24px_rgba(14,165,233,0.14)] ring-2 ring-sky-100"
                   : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-950"
               )}
             >
-              <span className={cn("transition", active ? "!text-white" : "text-inherit")}>{option.label}</span>
-              {active ? <span className="h-2.5 w-2.5 rounded-full bg-cyan-300" /> : null}
+              <span className={cn("transition", active ? "text-slate-950" : "text-inherit")}>{option.label}</span>
+              {active ? <span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> : null}
             </button>
           );
         })}

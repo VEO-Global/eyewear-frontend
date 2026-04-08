@@ -19,18 +19,31 @@ import {
   isStaffRole,
 } from "../../utils/authRole";
 import { staffTaskItems as sharedStaffTaskItems } from "../../utils/staffTasks";
+import { paymentService } from "../../services/paymentService";
 import { staffOrderApi } from "../../services/staffOrderApi";
-import { ORDER_PHASE } from "../../utils/orderHistory";
+import {
+  ORDER_PHASE,
+  ORDER_STATUS,
+  ORDER_STATUS_LABELS,
+  normalizeOrderStatusTab,
+} from "../../utils/orderHistory";
 import {
   filterVisibleStaffIntakeOrders,
+  isVisibleInStaffIntake,
   filterVisiblePrescriptionSupportOrders,
   readHiddenIntakeOrderIds,
 } from "../../utils/staffIntakeVisibility";
 import {
+  canOrderBeHandedOff,
+  canUseLocalHandoffFallback,
   isHandoffOrderStillVisible,
   isPrescriptionOrderStillVisible,
   readLocalReadyForHandoffOrders,
 } from "../../utils/staffOperationTransfer";
+import {
+  listSaleApprovedPaymentReviews,
+  listSalePendingPaymentReviews,
+} from "../../utils/paymentReviewStore";
 
 function normalizeSearchValue(value) {
   return String(value || "")
@@ -143,11 +156,11 @@ export function Header() {
     },
   ];
 
-  const orderTabs = [
+  const legacyOrderTabs = [
     { label: "Tất cả", value: "tat-ca" },
-    { label: "Chờ gia công", value: "cho-gia-cong" },
+    { label: "Chờ gia công", value: "Chờ gia công" },
     { label: "Vận chuyển", value: "van-chuyen" },
-    { label: "Chờ giao hàng", value: "cho-giao-hang" },
+    { label: "Chờ giao hàng", value: "Chờ giao hàng" },
     { label: "Hoàn thành", value: "hoan-thanh" },
     { label: "Đã hủy", value: "da-huy" },
     { label: "Trả hàng/Hoàn tiền", value: "tra-hang-hoan-tien" },
@@ -176,7 +189,16 @@ export function Header() {
 
   const recentNotifications = useMemo(() => notifications.slice(0, 10), [notifications]);
   const isOrderTrackingPage = location.pathname === "/user/orders";
-  const activeOrderTab = new URLSearchParams(location.search).get("tab") || "tat-ca";
+  const customerOrderTabs = [
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.ALL], value: ORDER_STATUS.ALL },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.PROCESSING], value: ORDER_STATUS.PROCESSING },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.SHIPPING], value: ORDER_STATUS.SHIPPING },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.READY_TO_DELIVER], value: ORDER_STATUS.READY_TO_DELIVER },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.COMPLETED], value: ORDER_STATUS.COMPLETED },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.CANCELED], value: ORDER_STATUS.CANCELED },
+    { label: ORDER_STATUS_LABELS[ORDER_STATUS.RETURN_REFUND], value: ORDER_STATUS.RETURN_REFUND },
+  ];
+  const activeOrderTab = normalizeOrderStatusTab(new URLSearchParams(location.search).get("tab"));
   const adminOnly = user?.role === "ADMIN" || location.pathname.startsWith("/admin");
   const customerOnly = user?.role === "CUSTOMER";
   const shouldShowSearch = !isAuthenticated || customerOnly;
@@ -351,20 +373,51 @@ export function Header() {
 
     async function syncStaffTaskCounts() {
       try {
-        const [intakeOrders, prescriptionOrders, handoffOrders] = await Promise.all([
+        const [intakeOrders, prescriptionOrders, handoffOrders, pendingVerificationOrders, pendingPayosReviews] = await Promise.all([
           staffOrderApi.fetchStaffOrders({ phase: ORDER_PHASE.PENDING_CONFIRMATION }),
           staffOrderApi.fetchStaffOrders({ phase: ORDER_PHASE.PRESCRIPTION_REVIEW }),
           staffOrderApi.fetchReadyForHandoffOrders(),
+          staffOrderApi.fetchStaffOrders({ status: "PENDING_VERIFICATION" }).catch(() => []),
+          paymentService
+            .getPendingPayosConfirmations()
+            .catch(() => listSalePendingPaymentReviews()),
         ]);
-
-        const visibleIntakeOrders = filterVisibleStaffIntakeOrders(
-          intakeOrders,
-          readHiddenIntakeOrderIds()
+        const approvedPayosOrderIds = new Set(
+          listSaleApprovedPaymentReviews()
+            .map((item) => String(item?.orderId ?? "").trim())
+            .filter(Boolean)
         );
-        const visiblePrescriptionOrders = filterVisiblePrescriptionSupportOrders(
-          prescriptionOrders
-        ).filter((item) => isPrescriptionOrderStillVisible(item));
-        const visibleHandoffOrders = mergeVisibleHandoffOrders(handoffOrders);
+        const pendingPaymentOrderIds = new Set(
+          (Array.isArray(pendingPayosReviews) ? pendingPayosReviews : [])
+            .map((item) => String(item?.orderId ?? item?.id ?? "").trim())
+            .filter(Boolean)
+        );
+
+        const hiddenIntakeOrderIds = readHiddenIntakeOrderIds();
+        const approvedPayosOrders = (Array.isArray(pendingVerificationOrders) ? pendingVerificationOrders : []).filter(
+          (item) => approvedPayosOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim())
+        );
+        const visibleIntakeOrders = [...intakeOrders, ...approvedPayosOrders.filter((item) => !item?.requiresPrescription)].filter((item) => {
+          const normalizedId = String(item?.id ?? item?.orderId ?? "").trim();
+
+          if (!normalizedId || hiddenIntakeOrderIds.has(normalizedId)) {
+            return false;
+          }
+
+          return approvedPayosOrderIds.has(normalizedId) || isVisibleInStaffIntake(item, hiddenIntakeOrderIds);
+        });
+        const visiblePrescriptionOrders = [
+          ...filterVisiblePrescriptionSupportOrders(prescriptionOrders),
+          ...approvedPayosOrders.filter((item) => item?.requiresPrescription),
+        ].filter(
+          (item) =>
+            !pendingPaymentOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim()) &&
+            isPrescriptionOrderStillVisible(item)
+        );
+        const visibleHandoffOrders = mergeVisibleHandoffOrders(
+          handoffOrders,
+          new Set([...pendingPaymentOrderIds, ...approvedPayosOrderIds])
+        );
 
         if (!active) {
           return;
@@ -400,13 +453,21 @@ export function Header() {
     };
   }, [staffOnly]);
 
-  function mergeVisibleHandoffOrders(apiOrders) {
+  function mergeVisibleHandoffOrders(apiOrders, blockedOrderIds = new Set()) {
     const map = new Map();
 
-    [...(Array.isArray(apiOrders) ? apiOrders : []), ...readLocalReadyForHandoffOrders()].forEach((item) => {
+    [
+      ...(Array.isArray(apiOrders) ? apiOrders : []),
+      ...readLocalReadyForHandoffOrders().filter((item) => canUseLocalHandoffFallback(item)),
+    ].forEach((item) => {
       const id = String(item?.id ?? item?.orderId ?? "").trim();
 
-      if (!id || !isHandoffOrderStillVisible(item)) {
+      if (
+        !id ||
+        blockedOrderIds.has(id) ||
+        !isHandoffOrderStillVisible(item) ||
+        !canOrderBeHandedOff(item)
+      ) {
         return;
       }
 
@@ -643,7 +704,7 @@ export function Header() {
           <div className="pb-3 pt-2">
             <div className="overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-[0_14px_30px_rgba(14,116,144,0.10)]">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7">
-                {orderTabs.map((tab) => {
+                {customerOrderTabs.map((tab) => {
                   const isActive = activeOrderTab === tab.value;
 
                   return (

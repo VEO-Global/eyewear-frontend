@@ -97,6 +97,8 @@ function AnimatedRoutes() {
             <Route path="/user/orders" element={<OrderTrackingPage />}></Route>
             <Route path="/user/cart" element={<CartPage />}></Route>
             <Route path="/user/cart/payment" element={<PaymentPage />}></Route>
+            <Route path="/payment/payos" element={<PaymentPage />}></Route>
+            <Route path="/payment/success" element={<PaymentPage />}></Route>
             <Route path="/user/preorder" element={<PreOrderPage />} />
             <Route path="/custom-glasses" element={<CustomGlassesPage />} />
             <Route path="/vision-test" element={<VisionTestPage />} />

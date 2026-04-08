@@ -31,6 +31,26 @@ function extractList(payload) {
   return [];
 }
 
+function unwrapEntity(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+    return unwrapEntity(payload.data);
+  }
+
+  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) {
+    return unwrapEntity(payload.result);
+  }
+
+  if (payload.content && typeof payload.content === "object" && !Array.isArray(payload.content)) {
+    return unwrapEntity(payload.content);
+  }
+
+  return payload;
+}
+
 function normalizeProduct(product) {
   return {
     ...product,
@@ -127,12 +147,13 @@ async function loadEnrichedCart() {
     productService.getProducts(),
   ]);
 
+  const normalizedCartPayload = unwrapEntity(cartPayload) || {};
   const products = extractList(productsPayload).map(normalizeProduct);
   const variantLookup = buildVariantLookup(products);
-  const rawItems = Array.isArray(cartPayload?.items) ? cartPayload.items : [];
+  const rawItems = extractList(normalizedCartPayload);
 
   return {
-    cartId: cartPayload?.cartId ?? null,
+    cartId: normalizedCartPayload?.cartId ?? normalizedCartPayload?.id ?? null,
     items: rawItems.map((item) => normalizeCartItem(item, variantLookup)),
   };
 }

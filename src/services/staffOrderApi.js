@@ -1,5 +1,6 @@
 import api from "../configs/config-axios";
 import { normalizePagedResponse } from "./managerApi";
+import { canOrderBeHandedOff } from "../utils/staffOperationTransfer";
 
 function extractNestedPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -292,7 +293,7 @@ export const staffOrderApi = {
 
   async fetchReadyForHandoffOrders() {
     const [phaseOrders, statusOrders] = await Promise.all([
-      this.fetchStaffOrders({ phase: "READY_TO_DELIVER" }),
+      this.fetchStaffOrders({ phase: "PROCESSING" }),
       this.fetchStaffOrders({ status: "PENDING_VERIFICATION" }),
     ]);
 
@@ -306,7 +307,7 @@ export const staffOrderApi = {
       mergedOrders.set(String(item.id), item);
     });
 
-    return Array.from(mergedOrders.values());
+    return Array.from(mergedOrders.values()).filter((item) => canOrderBeHandedOff(item));
   },
 
   async completeStaffOrder(id) {

@@ -87,7 +87,7 @@ export default function OperationPrescriptionOrdersPage() {
             Đơn hàng có thuốc
           </h1>
           <p className="text-gray-500">
-            Quản lý và giám sát tất cả đơn hàng có đơn thuốc
+            Quản lý và giám sát au có đơn thuốc
           </p>
         </div>
       </div>

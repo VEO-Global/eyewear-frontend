@@ -7,10 +7,17 @@ import {
   RotateCcw,
   Truck,
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getOperationOrders } from "../features/operations/api/operationApi";
 import orderService from "../services/orderService";
 import { getApiErrorMessage } from "../utils/apiError";
-import { ORDER_STATUS } from "../utils/orderHistory";
+import { ORDER_STATUS, normalizeOrderStatusTab } from "../utils/orderHistory";
+import {
+  LOCAL_STORAGE_QUEUE_UPDATED_EVENT,
+  readLocalOperationOrders,
+} from "../utils/staffOperationTransfer";
+
+const CUSTOMER_ORDER_POLLING_INTERVAL_MS = 15000;
 
 const orderTabContent = {
   [ORDER_STATUS.ALL]: {
@@ -50,6 +57,41 @@ const orderTabContent = {
   },
 };
 
+function normalizeOrderTabParam(tab) {
+  const normalized = decodeURIComponent(String(tab || "").trim()).toLowerCase();
+
+  switch (normalized) {
+    case "":
+    case "tat-ca":
+    case "tất cả":
+      return ORDER_STATUS.ALL;
+    case "cho-gia-cong":
+    case "chờ gia công":
+      return ORDER_STATUS.PROCESSING;
+    case "van-chuyen":
+    case "vận chuyển":
+      return ORDER_STATUS.SHIPPING;
+    case "cho-giao-hang":
+    case "chờ giao hàng":
+      return ORDER_STATUS.READY_TO_DELIVER;
+    case "hoan-thanh":
+    case "hoàn thành":
+      return ORDER_STATUS.COMPLETED;
+    case "da-huy":
+    case "đã hủy":
+      return ORDER_STATUS.CANCELED;
+    case "tra-hang-hoan-tien":
+    case "trả hàng/hoàn tiền":
+      return ORDER_STATUS.RETURN_REFUND;
+    default:
+      return orderTabContent[tab] ? tab : ORDER_STATUS.ALL;
+  }
+}
+
+function getNormalizedActiveTab(tab) {
+  return normalizeOrderStatusTab(tab);
+}
+
 function extractOrderList(payload) {
   if (Array.isArray(payload)) {
     return payload;
@@ -76,6 +118,53 @@ function extractOrderList(payload) {
   }
 
   return [];
+}
+
+function toPositiveNumber(value, fallback = 0) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : fallback;
+}
+
+function extractOrderPagination(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {
+      totalPages: 1,
+      pageNumber: 0,
+      pageSize: 0,
+    };
+  }
+
+  return {
+    totalPages: toPositiveNumber(payload?.totalPages ?? payload?.pages, 1),
+    pageNumber: Math.max(
+      0,
+      Number(payload?.number ?? payload?.page ?? payload?.pageNumber ?? 0) || 0
+    ),
+    pageSize: toPositiveNumber(
+      payload?.size ?? payload?.pageSize ?? payload?.limit ?? extractOrderList(payload).length,
+      0
+    ),
+  };
+}
+
+async function fetchAllCustomerOrders() {
+  const pageSize = 100;
+  const firstResponse = await orderService.getMyOrders({ page: 0, size: pageSize });
+  const firstItems = extractOrderList(firstResponse);
+  const pagination = extractOrderPagination(firstResponse);
+  const totalPages = Math.max(1, pagination.totalPages);
+
+  if (totalPages <= 1) {
+    return firstItems;
+  }
+
+  const remainingResponses = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      orderService.getMyOrders({ page: index + 1, size: pageSize })
+    )
+  );
+
+  return [firstItems, ...remainingResponses.map((response) => extractOrderList(response))].flat();
 }
 
 function formatCurrency(amount) {
@@ -191,42 +280,253 @@ function getItemLens(item) {
   );
 }
 
+function getOrderStatusSignals(order) {
+  return [
+    order?.operationStatus,
+    order?.currentOperationStatus,
+    order?.operation?.status,
+    order?.latestOperationStatus,
+    order?.status,
+    order?.orderStatus,
+    order?.deliveryStatus,
+    order?.phase,
+    order?.orderPhase,
+    order?.customerTab,
+  ]
+    .map((value) => String(value || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function getOperationWorkflowStatus(order) {
+  const statuses = [
+    order?.operationStatus,
+    order?.currentOperationStatus,
+    order?.operation?.status,
+    order?.latestOperationStatus,
+  ]
+    .map((value) => String(value || "").trim().toUpperCase())
+    .filter(Boolean);
+
+  return (
+    statuses.find((status) =>
+      ["MANUFACTURING", "PACKING", "READY_TO_SHIP", "SHIPPING", "COMPLETED"].includes(status)
+    ) || ""
+  );
+}
+
+function normalizeLookupValue(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function createCustomerOrderFromOperationOrder(operationOrder) {
+  if (!operationOrder || typeof operationOrder !== "object") {
+    return null;
+  }
+
+  const orderId = operationOrder?.orderId ?? operationOrder?.id ?? null;
+  const orderCode = operationOrder?.orderCode ?? operationOrder?.code ?? (orderId ? `ORD-${orderId}` : "--");
+
+  return {
+    id: orderId,
+    orderId,
+    code: orderCode,
+    orderCode,
+    orderNumber: orderCode,
+    operationStatus: operationOrder?.status ?? null,
+    currentOperationStatus: operationOrder?.status ?? null,
+    latestOperationStatus: operationOrder?.status ?? null,
+    status: operationOrder?.orderStatus ?? operationOrder?.status ?? null,
+    orderStatus: operationOrder?.orderStatus ?? operationOrder?.status ?? null,
+    paymentMethod: operationOrder?.paymentMethod ?? "--",
+    totalAmount: operationOrder?.totalAmount ?? operationOrder?.finalAmount ?? 0,
+    totalPrice: operationOrder?.totalAmount ?? operationOrder?.finalAmount ?? 0,
+    createdAt: operationOrder?.createdAt ?? null,
+    updatedAt: operationOrder?.updatedAt ?? operationOrder?.createdAt ?? null,
+    receiverName: operationOrder?.receiverName ?? "Khach hang",
+    shippingName: operationOrder?.receiverName ?? "Khach hang",
+    customerName: operationOrder?.receiverName ?? "Khach hang",
+    phoneNumber: operationOrder?.phoneNumber ?? null,
+    receiverPhone: operationOrder?.phoneNumber ?? null,
+    customerPhone: operationOrder?.phoneNumber ?? null,
+    customerEmail: operationOrder?.customerEmail ?? null,
+    shippingAddress: operationOrder?.shippingAddress ?? null,
+    logisticsProvider: operationOrder?.logisticsProvider ?? null,
+    shippingMethod: operationOrder?.shippingMethod ?? null,
+    trackingNumber: operationOrder?.trackingNumber ?? null,
+    requiresPrescription:
+      operationOrder?.orderType === "PRESCRIPTION" ||
+      Boolean(operationOrder?.prescription) ||
+      String(operationOrder?.prescriptionOption || "").toUpperCase() === "WITH_PRESCRIPTION",
+    prescription: operationOrder?.prescription ?? null,
+    items: Array.isArray(operationOrder?.items)
+      ? operationOrder.items.map((item) => ({
+          ...item,
+          name: item?.name ?? item?.productName ?? "San pham",
+          productName: item?.productName ?? item?.name ?? "San pham",
+          quantity: item?.quantity ?? 1,
+          price: item?.price ?? item?.unitPrice ?? 0,
+          variantPrice: item?.variantPrice ?? item?.unitPrice ?? item?.price ?? 0,
+        }))
+      : [],
+  };
+}
+
+function mergeCustomerOrdersWithOperationOrders(items, operationItems = readLocalOperationOrders()) {
+  const customerOrders = Array.isArray(items) ? items : [];
+  const operationOrders = Array.isArray(operationItems) ? operationItems : [];
+
+  if (!operationOrders.length) {
+    return customerOrders;
+  }
+
+  const byId = new Map();
+  const byCode = new Map();
+
+  operationOrders.forEach((item) => {
+    const orderId = normalizeLookupValue(item?.orderId ?? item?.id);
+    const orderCode = normalizeLookupValue(item?.orderCode ?? item?.code);
+
+    if (orderId) {
+      byId.set(orderId, item);
+    }
+
+    if (orderCode) {
+      byCode.set(orderCode, item);
+    }
+  });
+
+  const mergedOrders = customerOrders.map((order) => {
+    const orderId = normalizeLookupValue(order?.orderId ?? order?.id);
+    const orderCode = normalizeLookupValue(order?.orderCode ?? order?.code ?? order?.orderNumber);
+    const operationOrder = byId.get(orderId) || byCode.get(orderCode);
+
+    if (!operationOrder) {
+      return order;
+    }
+
+    return {
+      ...order,
+      operationStatus: operationOrder?.status ?? order?.operationStatus ?? null,
+      currentOperationStatus: operationOrder?.status ?? order?.currentOperationStatus ?? null,
+      latestOperationStatus: operationOrder?.status ?? order?.latestOperationStatus ?? null,
+      receiverName: order?.receiverName || operationOrder?.receiverName || order?.customerName,
+      phoneNumber: order?.phoneNumber || operationOrder?.phoneNumber || order?.receiverPhone,
+      shippingAddress: order?.shippingAddress || operationOrder?.shippingAddress,
+      updatedAt: operationOrder?.updatedAt || order?.updatedAt,
+      trackingNumber: order?.trackingNumber || operationOrder?.trackingNumber,
+      logisticsProvider: order?.logisticsProvider || operationOrder?.logisticsProvider,
+      shippingMethod: order?.shippingMethod || operationOrder?.shippingMethod,
+    };
+  });
+
+  operationOrders.forEach((operationOrder) => {
+    const operationId = normalizeLookupValue(operationOrder?.orderId ?? operationOrder?.id);
+    const operationCode = normalizeLookupValue(operationOrder?.orderCode ?? operationOrder?.code);
+    const alreadyExists = mergedOrders.some((order) => {
+      const orderId = normalizeLookupValue(order?.orderId ?? order?.id);
+      const orderCode = normalizeLookupValue(order?.orderCode ?? order?.code ?? order?.orderNumber);
+      return (operationId && orderId === operationId) || (operationCode && orderCode === operationCode);
+    });
+
+    if (!alreadyExists) {
+      const syntheticOrder = createCustomerOrderFromOperationOrder(operationOrder);
+
+      if (syntheticOrder) {
+        mergedOrders.push(syntheticOrder);
+      }
+    }
+  });
+
+  return mergedOrders;
+}
+
 function resolveDisplayStatus(order) {
-  return order?.status ?? order?.orderStatus ?? order?.phase ?? order?.orderPhase ?? "";
+  return getOrderStatusSignals(order)[0] || "";
 }
 
 function resolveCustomerStatusTab(order) {
-  const normalized = String(resolveDisplayStatus(order) || "")
-    .trim()
-    .toUpperCase();
+  const operationWorkflowStatus = getOperationWorkflowStatus(order);
 
-  switch (normalized) {
-    case "MANUFACTURING":
-    case "PACKING":
-    case "PROCESSING":
-    case "PRESCRIPTION_REVIEW":
-    case "PENDING_CONFIRMATION":
-      return ORDER_STATUS.PROCESSING;
-    case "READY_TO_SHIP":
-      return ORDER_STATUS.SHIPPING;
-    case "SHIPPING":
-    case "IN_TRANSIT":
-    case "OUT_FOR_DELIVERY":
-    case "READY_TO_DELIVER":
-      return ORDER_STATUS.READY_TO_DELIVER;
-    case "COMPLETED":
-    case "DELIVERED":
-      return ORDER_STATUS.COMPLETED;
-    case "CANCELED":
-    case "CANCELLED":
-      return ORDER_STATUS.CANCELED;
-    case "RETURN_REFUND":
-    case "RETURNED":
-    case "REFUNDED":
-      return ORDER_STATUS.RETURN_REFUND;
-    default:
-      return ORDER_STATUS.ALL;
+  if (["MANUFACTURING", "PACKING"].includes(operationWorkflowStatus)) {
+    return ORDER_STATUS.PROCESSING;
   }
+
+  if (operationWorkflowStatus === "READY_TO_SHIP") {
+    return ORDER_STATUS.SHIPPING;
+  }
+
+  if (operationWorkflowStatus === "SHIPPING") {
+    return ORDER_STATUS.READY_TO_DELIVER;
+  }
+
+  if (operationWorkflowStatus === "COMPLETED") {
+    return ORDER_STATUS.COMPLETED;
+  }
+
+  const statuses = getOrderStatusSignals(order);
+
+  if (
+    statuses.some((status) =>
+      [
+        ORDER_STATUS.PROCESSING.toUpperCase(),
+        "MANUFACTURING",
+        "PACKING",
+        "PROCESSING",
+        "PRESCRIPTION_REVIEW",
+        "PENDING_CONFIRMATION",
+      ].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.PROCESSING;
+  }
+
+  if (
+    statuses.some((status) =>
+      [ORDER_STATUS.SHIPPING.toUpperCase(), "READY_TO_SHIP"].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.SHIPPING;
+  }
+
+  if (
+    statuses.some((status) =>
+      [
+        ORDER_STATUS.READY_TO_DELIVER.toUpperCase(),
+        "SHIPPING",
+        "IN_TRANSIT",
+        "OUT_FOR_DELIVERY",
+        "READY_TO_DELIVER",
+      ].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.READY_TO_DELIVER;
+  }
+
+  if (
+    statuses.some((status) =>
+      [ORDER_STATUS.COMPLETED.toUpperCase(), "COMPLETED", "DELIVERED"].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.COMPLETED;
+  }
+
+  if (
+    statuses.some((status) =>
+      [ORDER_STATUS.CANCELED.toUpperCase(), "CANCELED", "CANCELLED"].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.CANCELED;
+  }
+
+  if (
+    statuses.some((status) =>
+      [ORDER_STATUS.RETURN_REFUND.toUpperCase(), "RETURN_REFUND", "RETURNED", "REFUNDED"].includes(status)
+    )
+  ) {
+    return ORDER_STATUS.RETURN_REFUND;
+  }
+
+  return ORDER_STATUS.ALL;
 }
 
 function getOrderStatusLabel(status) {
@@ -313,18 +613,6 @@ function OrderCard({ order }) {
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-bold tracking-[0.14em] text-white">
               {orderCode}
-            </span>
-            <span
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${getStatusBadgeClassName(displayStatus)}`}
-            >
-              {getOrderStatusLabel(displayStatus)}
-            </span>
-            <span
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${getPaymentStatusClassName(
-                order?.paymentStatus
-              )}`}
-            >
-              {getPaymentStatusLabel(order?.paymentStatus)}
             </span>
           </div>
 
@@ -424,31 +712,58 @@ function OrderCard({ order }) {
 
 export default function OrderTrackingPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const rawTab = useMemo(() => new URLSearchParams(location.search).get("tab"), [location.search]);
 
   const activeTab = useMemo(() => {
-    const tab = new URLSearchParams(location.search).get("tab");
-    return orderTabContent[tab] ? tab : ORDER_STATUS.ALL;
-  }, [location.search]);
+    return getNormalizedActiveTab(rawTab);
+  }, [rawTab]);
 
   const activeTabMeta = orderTabContent[activeTab] || orderTabContent[ORDER_STATUS.ALL];
 
   useEffect(() => {
+    const normalizedTab = getNormalizedActiveTab(rawTab);
+
+    if ((rawTab || "") === normalizedTab) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(location.search);
+    nextSearchParams.set("tab", normalizedTab);
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: `?${nextSearchParams.toString()}`,
+      },
+      { replace: true }
+    );
+  }, [activeTab, location.pathname, location.search, navigate, rawTab]);
+
+  useEffect(() => {
     let mounted = true;
 
-    async function loadOrders() {
+    async function loadOrders({ silent = false } = {}) {
       try {
-        setLoading(true);
+        if (!silent) {
+          setLoading(true);
+        }
         setError("");
-        const response = await orderService.getMyOrders();
+        const [response, operationOrders] = await Promise.all([
+          fetchAllCustomerOrders(),
+          getOperationOrders().catch(() => readLocalOperationOrders()),
+        ]);
 
         if (!mounted) {
           return;
         }
 
-        setOrders(extractOrderList(response));
+        setOrders(
+          mergeCustomerOrdersWithOperationOrders(extractOrderList(response), operationOrders)
+        );
       } catch (nextError) {
         if (!mounted) {
           return;
@@ -465,10 +780,44 @@ export default function OrderTrackingPage() {
 
     loadOrders();
 
+    const intervalId = window.setInterval(() => {
+      loadOrders({ silent: true });
+    }, CUSTOMER_ORDER_POLLING_INTERVAL_MS);
+
+    const handleStorage = (event) => {
+      if (event?.key && event.key !== "operation-local-queue") {
+        return;
+      }
+
+      loadOrders({ silent: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadOrders({ silent: true });
+      }
+    };
+
+    const handleLocalQueueUpdated = (event) => {
+      if (event?.detail?.key && event.detail.key !== "operation-local-queue") {
+        return;
+      }
+
+      loadOrders({ silent: true });
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(LOCAL_STORAGE_QUEUE_UPDATED_EVENT, handleLocalQueueUpdated);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(LOCAL_STORAGE_QUEUE_UPDATED_EVENT, handleLocalQueueUpdated);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [activeTab]);
 
   const filteredOrders = useMemo(() => {
     if (activeTab === ORDER_STATUS.ALL) {
@@ -525,9 +874,7 @@ export default function OrderTrackingPage() {
           {!loading && !error && filteredOrders.length === 0 ? (
             <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
               <p className="text-lg font-semibold text-slate-900">Chưa có đơn hàng phù hợp</p>
-              <p className="mt-2 text-sm text-slate-500">
-                Khi bộ phận vận hành cập nhật tiến độ, trạng thái ở đây sẽ tự chạy theo đúng bước tương ứng.
-              </p>
+          
             </div>
           ) : null}
 

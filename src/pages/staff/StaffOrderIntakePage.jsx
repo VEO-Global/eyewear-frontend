@@ -1,28 +1,96 @@
-import { Alert, Spin } from "antd";
+﻿import { Alert, Spin } from "antd";
 import { ClipboardList, PackageSearch, PhoneCall, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import StaffWorkspaceLayout from "../../components/staff/StaffWorkspaceLayout";
 import { addNotification } from "../../redux/notification/notificationSlice";
+import { buildAuthenticatedSseUrl } from "../../services/api";
 import { extractErrorMessage } from "../../services/managerApi";
+import { paymentService } from "../../services/paymentService";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE, formatCurrency } from "../../utils/orderHistory";
 import { appToast } from "../../utils/appToast";
 import {
   getPaymentReviewStatusLabel,
+  listSaleApprovedPaymentReviews,
   listSalePendingPaymentReviews,
   markSaleApproved,
   markSaleRejected,
+  removePaymentReviewRecord,
 } from "../../utils/paymentReviewStore";
 import {
   filterVisibleStaffIntakeOrders,
+  isVisibleInStaffIntake,
   readHiddenIntakeOrderIds,
   writeHiddenIntakeOrderIds,
 } from "../../utils/staffIntakeVisibility";
+import { readStaffIntakeOrders } from "../../utils/staffOrders";
 
 const STAFF_HIGHLIGHTED_ORDER_KEY = "staff-highlighted-order";
 const POLLING_INTERVAL_MS = 15000;
+
+function normalizePaymentReviewItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  return {
+    ...item,
+    orderId: item?.orderId ?? item?.id ?? null,
+    orderCode: item?.orderCode ?? item?.code ?? (item?.orderId ? `ORD-${item.orderId}` : "--"),
+    customerName: item?.customerName ?? item?.receiverName ?? item?.customer?.fullName ?? "--",
+    customerEmail: item?.customerEmail ?? item?.customer?.email ?? "",
+    amount: Number(item?.amount ?? item?.totalAmount ?? item?.finalAmount ?? 0),
+    status: String(item?.status ?? item?.paymentStatus ?? "PENDING_CONFIRMATION")
+      .trim()
+      .toUpperCase(),
+  };
+}
+
+function mergeOrdersById(primaryOrders, secondaryOrders) {
+  const merged = new Map();
+
+  [...(Array.isArray(primaryOrders) ? primaryOrders : []), ...(Array.isArray(secondaryOrders) ? secondaryOrders : [])].forEach((item) => {
+    const id = String(item?.id ?? item?.orderId ?? "").trim();
+
+    if (!id) {
+      return;
+    }
+
+    if (!merged.has(id)) {
+      merged.set(id, item);
+    }
+  });
+
+  return Array.from(merged.values());
+}
+
+function filterOrdersBlockedByPaymentReviews(orders, reviews) {
+  const blockedOrderIds = new Set(
+    (Array.isArray(reviews) ? reviews : [])
+      .map((item) => String(item?.orderId ?? "").trim())
+      .filter(Boolean)
+  );
+
+  return (Array.isArray(orders) ? orders : []).filter(
+    (item) => !blockedOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim())
+  );
+}
+
+function filterOrdersVisibleInIntake(orders, hiddenIds, approvedOrderIds) {
+  const approvedIds = approvedOrderIds instanceof Set ? approvedOrderIds : new Set();
+
+  return (Array.isArray(orders) ? orders : []).filter((item) => {
+    const normalizedId = String(item?.id ?? item?.orderId ?? "").trim();
+
+    if (!normalizedId || hiddenIds?.has(normalizedId)) {
+      return false;
+    }
+
+    return approvedIds.has(normalizedId) || isVisibleInStaffIntake(item, hiddenIds);
+  });
+}
 
 function QueueCard({ item, onPrimaryAction, onShowDetails, isActing }) {
   const primaryLabel = item.requiresPrescription ? "Xác nhận đơn thuốc" : "Xác nhận đơn hàng";
@@ -114,7 +182,7 @@ function PaymentReviewQueue({ items, actingOrderId, onApprove, onReject }) {
                   </div>
                   <p className="mt-3 text-sm text-slate-600">
                     Khách: <span className="font-semibold text-slate-900">{item.customerName || "--"}</span>
-                    {" • "}
+                    {"  "} {"  "} {"  "}
                     {item.customerEmail || "Chưa có email"}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">
@@ -323,14 +391,44 @@ export default function StaffOrderIntakePage() {
       setLoading(true);
     }
 
-    try {
-      const hiddenOrderIds = readHiddenIntakeOrderIds();
-      const pendingOrders = await staffOrderApi.fetchStaffOrders({
-        phase: ORDER_PHASE.PENDING_CONFIRMATION,
-      });
-      setPaymentReviews(listSalePendingPaymentReviews());
+    const hiddenOrderIds = readHiddenIntakeOrderIds();
+    const approvedPayosOrderIds = new Set(
+      listSaleApprovedPaymentReviews()
+        .map((item) => String(item?.orderId ?? "").trim())
+        .filter(Boolean)
+    );
+    const localPendingOrders = filterVisibleStaffIntakeOrders(
+      readStaffIntakeOrders(),
+      hiddenOrderIds
+    );
 
-      const nextOrders = filterVisibleStaffIntakeOrders(pendingOrders, hiddenOrderIds);
+    try {
+      const [pendingOrders, pendingPayosReviews, pendingVerificationOrders] = await Promise.all([
+        staffOrderApi.fetchStaffOrders({
+          phase: ORDER_PHASE.PENDING_CONFIRMATION,
+        }),
+        paymentService
+          .getPendingPayosConfirmations()
+          .then((items) => items.map(normalizePaymentReviewItem).filter(Boolean))
+          .catch(() => listSalePendingPaymentReviews()),
+        staffOrderApi.fetchStaffOrders({ status: "PENDING_VERIFICATION" }).catch(() => []),
+      ]);
+      setPaymentReviews(pendingPayosReviews);
+
+      const approvedPayosOrders = (Array.isArray(pendingVerificationOrders) ? pendingVerificationOrders : []).filter(
+        (item) =>
+          approvedPayosOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim()) &&
+          !item?.requiresPrescription
+      );
+
+      const nextOrders = filterOrdersBlockedByPaymentReviews(
+        filterOrdersVisibleInIntake(
+          mergeOrdersById(pendingOrders, mergeOrdersById(approvedPayosOrders, localPendingOrders)),
+          hiddenOrderIds,
+          approvedPayosOrderIds
+        ),
+        pendingPayosReviews
+      );
 
       setOrders(nextOrders);
       setError("");
@@ -351,6 +449,12 @@ export default function StaffOrderIntakePage() {
       seenOrderIdsRef.current = nextIds;
     } catch (apiError) {
       setPaymentReviews(listSalePendingPaymentReviews());
+      setOrders(
+        filterOrdersBlockedByPaymentReviews(
+          filterOrdersVisibleInIntake(localPendingOrders, hiddenOrderIds, approvedPayosOrderIds),
+          listSalePendingPaymentReviews()
+        )
+      );
       setError(extractErrorMessage(apiError, "Không thể tải danh sách đơn hàng."));
     } finally {
       setLoading(false);
@@ -365,6 +469,50 @@ export default function StaffOrderIntakePage() {
     }, POLLING_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const eventSource = new EventSource(buildAuthenticatedSseUrl("/payments/payos/stream/staff"));
+
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const normalizedItem = normalizePaymentReviewItem({
+          ...payload?.payment,
+          ...payload,
+        });
+
+        if (!normalizedItem?.orderId) {
+          return;
+        }
+
+        if (payload?.eventType === "payment_confirmed") {
+          setPaymentReviews((current) => {
+            const filtered = current.filter(
+              (entry) => String(entry.orderId) !== String(normalizedItem.orderId)
+            );
+            return [normalizedItem, ...filtered];
+          });
+          return;
+        }
+
+        if (["payment_approved", "payment_rejected"].includes(String(payload?.eventType || ""))) {
+          setPaymentReviews((current) =>
+            current.filter((entry) => String(entry.orderId) !== String(normalizedItem.orderId))
+          );
+        }
+      } catch {
+        // ignore invalid SSE payload
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   const todayFlow = [
@@ -397,6 +545,7 @@ export default function StaffOrderIntakePage() {
       hiddenOrderIds.add(String(order.id));
       hiddenOrderIds.add(String(updatedOrder.id ?? order.id));
       writeHiddenIntakeOrderIds(hiddenOrderIds);
+      removePaymentReviewRecord(order.id);
 
       const targetPath =
         updatedOrder.phase === ORDER_PHASE.PRESCRIPTION_REVIEW
@@ -441,28 +590,42 @@ export default function StaffOrderIntakePage() {
     }
   }
 
-  function handleApprovePaymentReview(item) {
+  async function handleApprovePaymentReview(item) {
     setActingOrderId(item.orderId);
 
     try {
+      try {
+        await paymentService.approvePayosPayment(item.orderId);
+      }
+      catch {
+        // fall back to local review state below
+      }
       markSaleApproved(item.orderId, item);
       setPaymentReviews((current) =>
         current.filter((entry) => String(entry.orderId) !== String(item.orderId))
       );
+      await loadOrders({ silent: true });
       appToast.success(`Đã xác nhận thanh toán cho đơn ${item.orderCode || item.orderId}.`);
     } finally {
       setActingOrderId(null);
     }
   }
 
-  function handleRejectPaymentReview(item) {
+  async function handleRejectPaymentReview(item) {
     setActingOrderId(item.orderId);
 
     try {
+      try {
+        await paymentService.rejectPayosPayment(item.orderId);
+      }
+      catch {
+        // fall back to local review state below
+      }
       markSaleRejected(item.orderId, item);
       setPaymentReviews((current) =>
         current.filter((entry) => String(entry.orderId) !== String(item.orderId))
       );
+      await loadOrders({ silent: true });
       appToast.info(`Đã đánh dấu chưa nhận được tiền cho đơn ${item.orderCode || item.orderId}.`);
     } finally {
       setActingOrderId(null);

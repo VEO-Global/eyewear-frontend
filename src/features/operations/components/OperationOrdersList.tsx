@@ -24,22 +24,40 @@ function OrderRow({
 
   return (
     <tr
-      className={`cursor-pointer border-b border-slate-200/80 transition hover:bg-slate-50 ${selected ? "bg-cyan-50/70" : "bg-white"}`}
+      className={`cursor-pointer border-b border-slate-200/80 transition hover:bg-slate-50 ${
+        selected ? "bg-cyan-50/70" : "bg-white"
+      }`}
       onClick={() => onSelect(order.orderId)}
     >
-      <td className="px-4 py-4 font-semibold text-slate-900">{order.orderCode}</td>
-      <td className="px-4 py-4 text-slate-600">{order.customerEmail || "--"}</td>
-      <td className="px-4 py-4 text-slate-700">{order.receiverName || "--"}</td>
-      <td className="px-4 py-4 text-slate-600">{order.phoneNumber || "--"}</td>
-      <td className="px-4 py-4"><OperationOrderTypeBadge orderType={order.orderType} /></td>
-      <td className="px-4 py-4"><OperationStatusBadge status={order.status} /></td>
-      <td className="px-4 py-4 text-slate-600">{order.logisticsProvider || "--"}</td>
-      <td className="px-4 py-4 text-slate-600">{order.trackingNumber || "--"}</td>
-      <td className="px-4 py-4 text-slate-600">{formatDateTime(order.createdAt)}</td>
-      <td className="px-4 py-4 text-slate-600">{formatDateTime(order.updatedAt)}</td>
-      <td className="px-4 py-4 font-semibold text-slate-900">{formatCurrency(order.totalAmount)}</td>
-      <td className="px-4 py-4">
-        <div className="flex flex-wrap gap-2">
+      <td className="px-3 py-4 font-semibold text-slate-900">{order.orderCode}</td>
+      <td className="px-3 py-4">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-700">{order.receiverName || "--"}</p>
+          <p className="truncate text-xs text-slate-500">{order.customerEmail || "--"}</p>
+          <p className="text-xs text-slate-500">{order.phoneNumber || "--"}</p>
+        </div>
+      </td>
+      <td className="px-3 py-4">
+        <OperationOrderTypeBadge orderType={order.orderType} />
+      </td>
+      <td className="px-3 py-4">
+        <OperationStatusBadge status={order.status} />
+      </td>
+      <td className="px-3 py-4 text-slate-600">
+        <div className="space-y-1 text-xs leading-5">
+          <p>{order.logisticsProvider || "--"}</p>
+          <p className="truncate">{order.trackingNumber || "--"}</p>
+        </div>
+      </td>
+      <td className="px-3 py-4 text-slate-600">
+        <div className="space-y-1 text-xs leading-5">
+          <p>{formatDateTime(order.createdAt)}</p>
+          <p>{formatDateTime(order.updatedAt)}</p>
+        </div>
+      </td>
+      <td className="px-3 py-4 font-semibold text-slate-900">{formatCurrency(order.totalAmount)}</td>
+      <td className="px-3 py-4">
+        <div className="flex flex-col gap-2">
           {nextStatus ? (
             <ActionButton
               size="sm"
@@ -48,6 +66,7 @@ function OrderRow({
                 onAdvance?.(order);
               }}
               disabled={blocked || advancing}
+              className="justify-center"
             >
               <ArrowRight className="h-4 w-4" />
               {advancing ? "Đang chuyển..." : `Sang ${OPERATION_STATUS_LABELS[nextStatus]}`}
@@ -60,13 +79,16 @@ function OrderRow({
               event.stopPropagation();
               onSelect(order.orderId);
             }}
+            className="justify-center"
           >
             <Eye className="h-4 w-4" />
             Chi tiết
           </ActionButton>
         </div>
         {blocked ? (
-          <p className="mt-2 text-xs text-rose-600">Cần logistics và tracking trước khi chuyển bước.</p>
+          <p className="mt-2 text-xs text-rose-600">
+            Cần logistics và tracking trước khi chuyển bước.
+          </p>
         ) : null}
       </td>
     </tr>
@@ -111,22 +133,18 @@ export function OperationOrdersTable({
 
   return (
     <SurfaceCard className="overflow-hidden border-slate-200/80 p-0">
-      <div className="overflow-x-auto">
-        <table className="min-w-[1380px] w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+      <div className="overflow-hidden">
+        <table className="w-full table-fixed text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             <tr>
-              <th className="px-4 py-4">Order code</th>
-              <th className="px-4 py-4">Email khách</th>
-              <th className="px-4 py-4">Người nhận</th>
-              <th className="px-4 py-4">Số điện thoại</th>
-              <th className="px-4 py-4">Loại đơn</th>
-              <th className="px-4 py-4">Trạng thái</th>
-              <th className="px-4 py-4">Logistics</th>
-              <th className="px-4 py-4">Tracking</th>
-              <th className="px-4 py-4">Ngày tạo</th>
-              <th className="px-4 py-4">Cập nhật</th>
-              <th className="px-4 py-4">Tổng tiền</th>
-              <th className="px-4 py-4">Thao tác</th>
+              <th className="w-[10%] px-3 py-4">Mã đơn</th>
+              <th className="w-[22%] px-3 py-4">Khách hàng</th>
+              <th className="w-[12%] px-3 py-4">Loại đơn</th>
+              <th className="w-[14%] px-3 py-4">Trạng thái</th>
+              <th className="w-[12%] px-3 py-4">Vận chuyển</th>
+              <th className="w-[14%] px-3 py-4">Thời gian</th>
+              <th className="w-[8%] px-3 py-4">Tổng tiền</th>
+              <th className="w-[18%] px-3 py-4">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -162,7 +180,7 @@ export function OperationOrderCards({
 }) {
   if (loading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3 lg:hidden">
         {Array.from({ length: 5 }).map((_, index) => (
           <SkeletonBlock key={index} className="h-44 rounded-[26px]" />
         ))}
@@ -172,10 +190,12 @@ export function OperationOrderCards({
 
   if (!orders?.length) {
     return (
-      <EmptyBlock
-        title="Không có đơn phù hợp"
-        description="Danh sách hiện đang trống. Thử bộ lọc khác để kiểm tra khối lượng công việc ở trạng thái khác."
-      />
+      <div className="lg:hidden">
+        <EmptyBlock
+          title="Không có đơn phù hợp"
+          description="Danh sách hiện đang trống. Thử bộ lọc khác để kiểm tra khối lượng công việc ở trạng thái khác."
+        />
+      </div>
     );
   }
 
@@ -191,7 +211,9 @@ export function OperationOrderCards({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-base font-semibold text-slate-950">{order.orderCode}</p>
-                  <p className="mt-1 text-sm text-slate-500">{order.customerEmail || order.receiverName || "--"}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {order.customerEmail || order.receiverName || "--"}
+                  </p>
                 </div>
                 <ChevronRight className="h-5 w-5 text-slate-300" />
               </div>
@@ -218,7 +240,9 @@ export function OperationOrderCards({
                   disabled={blocked || advancingOrderId === order.orderId}
                 >
                   <ArrowRight className="h-4 w-4" />
-                  {advancingOrderId === order.orderId ? "Đang chuyển..." : `Sang ${OPERATION_STATUS_LABELS[nextStatus]}`}
+                  {advancingOrderId === order.orderId
+                    ? "Đang chuyển..."
+                    : `Sang ${OPERATION_STATUS_LABELS[nextStatus]}`}
                 </ActionButton>
               ) : null}
               <ActionButton variant="secondary" size="sm" onClick={() => onSelect(order.orderId)}>
@@ -227,7 +251,9 @@ export function OperationOrderCards({
               </ActionButton>
             </div>
             {blocked ? (
-              <p className="mt-3 text-xs text-rose-600">Cần logistics và tracking trước khi chuyển bước.</p>
+              <p className="mt-3 text-xs text-rose-600">
+                Cần logistics và tracking trước khi chuyển bước.
+              </p>
             ) : null}
           </SurfaceCard>
         );

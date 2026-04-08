@@ -2,7 +2,6 @@ import { Filter, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { appToast } from "../../../utils/appToast";
 import { getApiErrorMessage } from "../../../utils/apiError";
-import { upsertLocalOperationOrder } from "../../../utils/staffOperationTransfer";
 import {
   LogisticsModal,
   TrackingModal,
@@ -18,7 +17,6 @@ import {
   SurfaceCard,
 } from "../components/OperationPrimitives";
 import { OperationOrderCards, OperationOrdersTable } from "../components/OperationOrdersList";
-import { OperationStatusRail } from "../components/OperationStatusRail";
 import { useOperationFilters } from "../hooks/useOperationFilters";
 import {
   useOperationOrder,
@@ -29,9 +27,7 @@ import {
   operationQueryKeys,
 } from "../hooks/useOperationQueries";
 import type { OperationOrderResponse, OperationStatus } from "../types";
-import { OPERATION_STATUS_LABELS } from "../utils/constants";
 import { getNextActionStatus, isReadyToShipBlocked } from "../utils/workflow";
-import { useQueryClient } from "@tanstack/react-query";
 
 export default function OperationsOrdersPage() {
   const {
@@ -52,7 +48,6 @@ export default function OperationsOrdersPage() {
   const [trackingOpen, setTrackingOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<OperationStatus | null>(null);
   const [advancingOrderId, setAdvancingOrderId] = useState<number | null>(null);
-  const queryClient = useQueryClient();
 
   const ordersQuery = useOperationOrders(filters);
   const detailQuery = useOperationOrder(selectedOrderId);
@@ -120,42 +115,8 @@ export default function OperationsOrdersPage() {
       await statusMutation.mutateAsync({ orderId: activeOrder.orderId, payload });
       appToast.success("Cập nhật trạng thái thành công.");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Không thể cập nhật trạng thái.");
-
-      if (error?.response?.status === 500 || message === "Something went wrong") {
-        applyStatusLocally(activeOrder, payload.status, payload.note);
-        appToast.warning("Backend đang lỗi nên mình đã chuyển trạng thái cục bộ để bạn tiếp tục thao tác.");
-        return;
-      }
-
-      throw error;
+      appToast.error(getApiErrorMessage(error, "Không thể cập nhật trạng thái."));
     }
-  }
-
-  function applyStatusLocally(order: OperationOrderResponse, nextStatus: OperationStatus, note?: string) {
-    const now = new Date().toISOString();
-    const nextOrder = {
-      ...order,
-      status: nextStatus,
-      statusLabel: OPERATION_STATUS_LABELS[nextStatus],
-      updatedAt: now,
-      note: note ?? order.note,
-      statusHistory: [
-        {
-          id: Date.now(),
-          status: nextStatus,
-          statusLabel: OPERATION_STATUS_LABELS[nextStatus],
-          note: note || `Chuyển sang ${OPERATION_STATUS_LABELS[nextStatus]}.`,
-          createdAt: now,
-        },
-        ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
-      ],
-    };
-
-    upsertLocalOperationOrder(nextOrder);
-    queryClient.invalidateQueries({ queryKey: operationQueryKeys.all });
-    queryClient.invalidateQueries({ queryKey: operationQueryKeys.summary() });
-    queryClient.invalidateQueries({ queryKey: operationQueryKeys.detail(order.orderId) });
   }
 
   async function handleAdvanceOrder(order: OperationOrderResponse) {
@@ -181,14 +142,7 @@ export default function OperationsOrdersPage() {
       });
       appToast.success("Đã chuyển đơn sang bước tiếp theo.");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Không thể chuyển đơn sang bước tiếp theo.");
-
-      if (error?.response?.status === 500 || message === "Something went wrong") {
-        applyStatusLocally(order, nextStatus);
-        appToast.warning("Backend đang lỗi nên mình đã chuyển trạng thái cục bộ để bạn tiếp tục thao tác.");
-      } else {
-        appToast.error(message);
-      }
+      appToast.error(getApiErrorMessage(error, "Không thể chuyển đơn sang bước tiếp theo."));
     } finally {
       setAdvancingOrderId(null);
     }
@@ -247,11 +201,7 @@ export default function OperationsOrdersPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="hidden lg:block">
-          <OperationStatusRail value={status} onChange={setStatus} />
-        </div>
-
+      <div className="grid grid-cols-1 items-start gap-6">
         <div className="space-y-4">
           {ordersQuery.isError ? (
             <EmptyBlock
@@ -333,9 +283,6 @@ export default function OperationsOrdersPage() {
             onStatusChange={setStatus}
             onReset={resetFilters}
           />
-          <SurfaceCard className="border-slate-200/80 p-4">
-            <OperationStatusRail value={status} onChange={setStatus} />
-          </SurfaceCard>
           <div className="flex justify-end">
             <ActionButton onClick={() => setMobileFiltersOpen(false)}>Xong</ActionButton>
           </div>

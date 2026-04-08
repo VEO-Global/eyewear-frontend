@@ -1,12 +1,18 @@
 import { Alert, Spin } from "antd";
 import { Eye, FileSearch, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import StaffWorkspaceLayout from "../../components/staff/StaffWorkspaceLayout";
 import { extractErrorMessage } from "../../services/managerApi";
+import { paymentService } from "../../services/paymentService";
 import { staffOrderApi } from "../../services/staffOrderApi";
 import { ORDER_PHASE } from "../../utils/orderHistory";
 import { appToast } from "../../utils/appToast";
+import {
+  listSaleApprovedPaymentReviews,
+  listSalePendingPaymentReviews,
+  removePaymentReviewRecord,
+} from "../../utils/paymentReviewStore";
 import { filterVisiblePrescriptionSupportOrders } from "../../utils/staffIntakeVisibility";
 import {
   createLocalReadyForHandoffOrder,
@@ -65,19 +71,19 @@ function mergePrescriptionEntries(...entries) {
   return normalizedEntries.reduce((merged, current) => ({
     ...merged,
     ...current,
-    id: merged?.id ?? current?.id ?? null,
-    prescriptionImageUrl: merged?.prescriptionImageUrl || current?.prescriptionImageUrl || "",
-    sphereOd: merged?.sphereOd !== "" ? merged.sphereOd : current?.sphereOd ?? "",
-    cylinderOd: merged?.cylinderOd !== "" ? merged.cylinderOd : current?.cylinderOd ?? "",
-    axisOd: merged?.axisOd !== "" ? merged.axisOd : current?.axisOd ?? "",
-    sphereOs: merged?.sphereOs !== "" ? merged.sphereOs : current?.sphereOs ?? "",
-    cylinderOs: merged?.cylinderOs !== "" ? merged.cylinderOs : current?.cylinderOs ?? "",
-    axisOs: merged?.axisOs !== "" ? merged.axisOs : current?.axisOs ?? "",
-    pd: merged?.pd !== "" ? merged.pd : current?.pd ?? "",
-    note: merged?.note || current?.note || "",
-    reviewStatus: merged?.reviewStatus || current?.reviewStatus || "PENDING",
-    reviewNote: merged?.reviewNote || current?.reviewNote || "",
-  }), null);
+    id: merged.id ?? current?.id ?? null,
+    prescriptionImageUrl: merged.prescriptionImageUrl || current?.prescriptionImageUrl || "",
+    sphereOd: merged.sphereOd !== "" ? merged.sphereOd : current?.sphereOd ?? "",
+    cylinderOd: merged.cylinderOd !== "" ? merged.cylinderOd : current?.cylinderOd ?? "",
+    axisOd: merged.axisOd !== "" ? merged.axisOd : current?.axisOd ?? "",
+    sphereOs: merged.sphereOs !== "" ? merged.sphereOs : current?.sphereOs ?? "",
+    cylinderOs: merged.cylinderOs !== "" ? merged.cylinderOs : current?.cylinderOs ?? "",
+    axisOs: merged.axisOs !== "" ? merged.axisOs : current?.axisOs ?? "",
+    pd: merged.pd !== "" ? merged.pd : current?.pd ?? "",
+    note: merged.note || current?.note || "",
+    reviewStatus: merged.reviewStatus || current?.reviewStatus || "PENDING",
+    reviewNote: merged.reviewNote || current?.reviewNote || "",
+  }), normalizePrescriptionEntry(normalizedEntries[0]));
 }
 
 function hasManualPrescriptionData(entry) {
@@ -235,7 +241,6 @@ function OrderPrescriptionModal({ order, loading, onClose }) {
 
 export default function StaffPrescriptionSupportPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const storedHighlight = (() => {
     try {
       const raw = sessionStorage.getItem(STAFF_HIGHLIGHTED_ORDER_KEY);
@@ -264,12 +269,36 @@ export default function StaffPrescriptionSupportPage() {
     }
 
     try {
-      const orderList = await staffOrderApi.fetchStaffOrders({
-        phase: ORDER_PHASE.PRESCRIPTION_REVIEW,
-      });
-
+      const [orderList, pendingVerificationOrders, pendingPayosReviews] = await Promise.all([
+        staffOrderApi.fetchStaffOrders({
+          phase: ORDER_PHASE.PRESCRIPTION_REVIEW,
+        }),
+        staffOrderApi.fetchStaffOrders({ status: "PENDING_VERIFICATION" }).catch(() => []),
+        paymentService
+          .getPendingPayosConfirmations()
+          .catch(() => listSalePendingPaymentReviews()),
+      ]);
+      const pendingPaymentOrderIds = new Set(
+        (Array.isArray(pendingPayosReviews) ? pendingPayosReviews : [])
+          .map((item) => String(item?.orderId ?? item?.id ?? "").trim())
+          .filter(Boolean)
+      );
+      const approvedPayosOrderIds = new Set(
+        listSaleApprovedPaymentReviews()
+          .map((item) => String(item?.orderId ?? "").trim())
+          .filter(Boolean)
+      );
+      const approvedPayosPrescriptionOrders = (Array.isArray(pendingVerificationOrders) ? pendingVerificationOrders : []).filter(
+        (item) =>
+          approvedPayosOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim()) &&
+          item?.requiresPrescription
+      );
       setOrders(
-        filterVisiblePrescriptionSupportOrders(orderList)
+        [
+          ...filterVisiblePrescriptionSupportOrders(orderList),
+          ...approvedPayosPrescriptionOrders,
+        ]
+          .filter((item) => !pendingPaymentOrderIds.has(String(item?.id ?? item?.orderId ?? "").trim()))
           .filter((item) => isPrescriptionOrderStillVisible(item))
           .map((item) => ({
             ...item,
@@ -296,22 +325,25 @@ export default function StaffPrescriptionSupportPage() {
   }, []);
 
   async function openPrescriptionDetail(order) {
-    setSelectedOrder({
+    const fallbackOrder = {
       ...order,
       orderId: order?.id ?? order?.orderId ?? null,
       prescription: normalizePrescriptionEntry(order?.prescription),
-    });
+    };
+
+    setSelectedOrder(fallbackOrder);
     setDetailLoading(true);
 
     try {
-      const detail = await staffOrderApi.fetchStaffOrderDetail(order.id);
-      let prescriptionDetail = null;
+      const [detailResult, prescriptionResult] = await Promise.allSettled([
+        staffOrderApi.fetchStaffOrderDetail(order.id),
+        staffOrderApi.fetchOrderPrescription(order.id),
+      ]);
 
-      try {
-        prescriptionDetail = await staffOrderApi.fetchOrderPrescription(order.id);
-      } catch {
-        // keep the embedded prescription data if the dedicated endpoint fails
-      }
+      const detail =
+        detailResult.status === "fulfilled" ? detailResult.value : fallbackOrder;
+      const prescriptionDetail =
+        prescriptionResult.status === "fulfilled" ? prescriptionResult.value : null;
 
       const resolvedPrescription = mergePrescriptionEntries(
         prescriptionDetail,
@@ -350,7 +382,11 @@ export default function StaffPrescriptionSupportPage() {
       const prescription = normalizePrescriptionEntry(
         mergePrescriptionEntries(order?.prescription)
       );
-
+      const approvedPrescription = {
+        ...prescription,
+        reviewStatus: "APPROVED",
+        reviewNote: "Prescription reviewed by staff",
+      };
       if (prescription?.id) {
         try {
           await staffOrderApi.reviewPrescription(prescription.id, {
@@ -372,63 +408,65 @@ export default function StaffPrescriptionSupportPage() {
       }
 
       try {
-        await staffOrderApi.completeStaffOrder(orderId);
-      } catch (completeError) {
-        console.error("completeStaffOrder failed, fallback to phase update", {
-          orderId,
-          completeError,
-        });
-
         await staffOrderApi.updateStaffOrderPhase(orderId, {
-          phase: "READY_TO_DELIVER",
+          phase: "PROCESSING",
+          note: "Prescription review completed",
+        });
+      } catch (phaseError) {
+        const normalizedMessage = String(
+          extractErrorMessage(phaseError, "Cannot move order to processing.")
+        ).toLowerCase();
+
+        if (normalizedMessage.includes("order must be confirmed before processing")) {
+          await staffOrderApi.confirmStaffOrder(orderId);
+          removePaymentReviewRecord(orderId);
+          await staffOrderApi.updateStaffOrderPhase(orderId, {
+            phase: "PROCESSING",
+            note: "Prescription review completed",
+          });
+        } else {
+          throw phaseError;
+        }
+      }
+      /*
+
           note: "Đã hoàn tất kiểm tra đơn thuốc",
         });
       }
 
-      upsertLocalReadyForHandoffOrder(createLocalReadyForHandoffOrder(order));
+      */
+      upsertLocalReadyForHandoffOrder(
+        createLocalReadyForHandoffOrder({
+          ...order,
+          id: orderId,
+          orderId,
+          phase: "PROCESSING",
+          status: "PENDING_VERIFICATION",
+          prescriptionReviewStatus: "APPROVED",
+          prescription: approvedPrescription,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      removePaymentReviewRecord(orderId);
       markCompletedPrescriptionOrder(orderId);
       setOrders((currentOrders) => currentOrders.filter((item) => String(item.id) !== String(orderId)));
 
-      sessionStorage.setItem(
-        STAFF_HIGHLIGHTED_ORDER_KEY,
-        JSON.stringify({
-          highlightedOrderId: orderId,
-          highlightedOrderCode: order.code,
-          targetPath: "/staff/operations-handoff",
-        })
-      );
-
       await loadOrders({ silent: true });
+      appToast.success(`Đã hoàn tất kiểm tra đơn ${order.code}.`);
 
-      navigate("/staff/operations-handoff", {
-        state: {
-          highlightedOrderId: orderId,
-          highlightedOrderCode: order.code,
-        },
-      });
     } catch (apiError) {
       console.error("Prescription review fallback to local handoff queue", {
         orderId,
+        attemptedPhase: "PROCESSING",
+        responseStatus: apiError?.response?.status,
+        responseData: apiError?.response?.data,
+        errorMessage: apiError?.message,
+        errorCode: apiError?.code,
         apiError,
       });
-      upsertLocalReadyForHandoffOrder(createLocalReadyForHandoffOrder(order));
-      markCompletedPrescriptionOrder(orderId);
-      setOrders((currentOrders) => currentOrders.filter((item) => String(item.id) !== String(orderId)));
-      sessionStorage.setItem(
-        STAFF_HIGHLIGHTED_ORDER_KEY,
-        JSON.stringify({
-          highlightedOrderId: orderId,
-          highlightedOrderCode: order.code,
-          targetPath: "/staff/operations-handoff",
-        })
+      appToast.warning(
+        extractErrorMessage(apiError, `Không thể chuyển đơn ${order.code} sang tab bàn giao.`)
       );
-      appToast.success(`Đã chuyển đơn ${order.code} sang tab bàn giao.`);
-      navigate("/staff/operations-handoff", {
-        state: {
-          highlightedOrderId: orderId,
-          highlightedOrderCode: order.code,
-        },
-      });
     } finally {
       setActingOrderId(null);
     }
@@ -521,7 +559,7 @@ export default function StaffPrescriptionSupportPage() {
                           disabled={!canComplete || actingOrderId === item.id}
                           className="rounded-full bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
-                          Hoàn tất kiểm tra đơn hàng
+                          Hoàn tất kiểm tra đơn thuốc
                         </button>
                         <button
                           type="button"
@@ -554,9 +592,7 @@ export default function StaffPrescriptionSupportPage() {
                   {orders.filter((item) => canCompletePrescriptionReview(item)).length}
                 </span>
               </div>
-              <div className="rounded-[22px] border border-rose-200 bg-white/90 px-4 py-4">
-                Chỉ cần có 1 trong 2: ảnh đơn thuốc hoặc dữ liệu nhập tay, staff có thể duyệt qua.
-              </div>
+            
             </div>
           </div>
         }
@@ -570,3 +606,4 @@ export default function StaffPrescriptionSupportPage() {
     </>
   );
 }
+

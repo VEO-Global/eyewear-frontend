@@ -10,6 +10,35 @@ export const ORDER_STATUS = {
   RETURN_REFUND: "tra-hang-hoan-tien",
 };
 
+export const ORDER_STATUS_LABELS = {
+  [ORDER_STATUS.ALL]: "Tất cả",
+  [ORDER_STATUS.PROCESSING]: "Chờ gia công",
+  [ORDER_STATUS.SHIPPING]: "Vận chuyển",
+  [ORDER_STATUS.READY_TO_DELIVER]: "Chờ giao hàng",
+  [ORDER_STATUS.COMPLETED]: "Hoàn thành",
+  [ORDER_STATUS.CANCELED]: "Đã hủy",
+  [ORDER_STATUS.RETURN_REFUND]: "Trả hàng/Hoàn tiền",
+};
+
+const ORDER_STATUS_LEGACY_LABEL_TO_SLUG = {
+  "tat ca": ORDER_STATUS.ALL,
+  "tất cả": ORDER_STATUS.ALL,
+  "cho gia cong": ORDER_STATUS.PROCESSING,
+  "chờ gia công": ORDER_STATUS.PROCESSING,
+  "van chuyen": ORDER_STATUS.SHIPPING,
+  "vận chuyển": ORDER_STATUS.SHIPPING,
+  "cho giao hang": ORDER_STATUS.READY_TO_DELIVER,
+  "chờ giao hàng": ORDER_STATUS.READY_TO_DELIVER,
+  "hoan thanh": ORDER_STATUS.COMPLETED,
+  "hoàn thành": ORDER_STATUS.COMPLETED,
+  "da huy": ORDER_STATUS.CANCELED,
+  "đã hủy": ORDER_STATUS.CANCELED,
+  "tra hang/hoan tien": ORDER_STATUS.RETURN_REFUND,
+  "tra hang hoan tien": ORDER_STATUS.RETURN_REFUND,
+  "trả hàng/hoàn tiền": ORDER_STATUS.RETURN_REFUND,
+  "trả hàng hoàn tiền": ORDER_STATUS.RETURN_REFUND,
+};
+
 export const ORDER_PHASE = {
   PENDING_CONFIRMATION: "pending_confirmation",
   PRESCRIPTION_REVIEW: "prescription_review",
@@ -24,6 +53,42 @@ export const ORDER_PHASE = {
 export const ORDER_CONFIRMATION_WINDOW_MS = 30 * 60 * 1000;
 export const PRESCRIPTION_REVIEW_WINDOW_MS = 60 * 60 * 1000;
 export const PROCESSING_WINDOW_MS = 4 * 60 * 60 * 1000;
+
+function stripVietnameseAccents(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+function normalizeTabLookupValue(value) {
+  return stripVietnameseAccents(decodeURIComponent(String(value || "").trim()))
+    .toLowerCase()
+    .replace(/_/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeOrderStatusTab(value) {
+  const normalized = normalizeTabLookupValue(value);
+
+  if (!normalized) {
+    return ORDER_STATUS.ALL;
+  }
+
+  const slugMatch = Object.values(ORDER_STATUS).find((item) => item === normalized);
+
+  if (slugMatch) {
+    return slugMatch;
+  }
+
+  return ORDER_STATUS_LEGACY_LABEL_TO_SLUG[normalized] || ORDER_STATUS.ALL;
+}
+
+export function getOrderStatusLabelByTab(tab) {
+  return ORDER_STATUS_LABELS[normalizeOrderStatusTab(tab)] || ORDER_STATUS_LABELS[ORDER_STATUS.ALL];
+}
 
 export function getOrderHistoryStorageKey(userId) {
   return `${ORDER_HISTORY_STORAGE_PREFIX}:${userId || "guest"}`;

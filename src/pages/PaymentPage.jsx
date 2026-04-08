@@ -1,23 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Spin } from "antd";
 import { ArrowBigLeft, CircleCheckBig, QrCode, ShieldCheck } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import CheckOutForm from "../form/CheckOutForm";
 import CheckOutOrderSummary from "../components/checkout/CheckOutOrderSummary";
-import { fetchCart } from "../redux/cart/cartSlice";
+import { fetchCart, removeItem, removeSelectedItems } from "../redux/cart/cartSlice";
 import { fetchProducts } from "../redux/products/producSlice";
+import { buildAuthenticatedSseUrl } from "../services/api";
 import { productService } from "../services/productService";
 import { orderService } from "../services/orderService";
 import { paymentService } from "../services/paymentService";
 import { getApiErrorMessage } from "../utils/apiError";
 import { appToast } from "../utils/appToast";
-import {
-  ensurePayosPaymentReviewRecord,
-  getPaymentReviewRecord,
-  getPaymentReviewStatusLabel,
-  markCustomerPaid,
-} from "../utils/paymentReviewStore";
+import { appendStoredOrder, createStoredOrder } from "../utils/orderHistory";
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat("vi-VN", {
@@ -144,7 +140,7 @@ function normalizeOrderLike(payload) {
     ),
     paymentMethod: order?.paymentMethod ?? payment?.method ?? null,
     paymentStatus: order?.paymentStatus ?? payment?.status ?? null,
-    checkoutUrl: order?.checkoutUrl ?? null,
+    checkoutUrl: order?.checkoutUrl ?? payment?.checkoutUrl ?? null,
   };
 }
 
@@ -153,9 +149,89 @@ function normalizePaymentStatusLike(payload) {
 
   return {
     ...status,
-    status: status?.status ?? "PENDING",
+    status: String(status?.status ?? "UNPAID").trim().toUpperCase() || "UNPAID",
     amount: pickFirstNumber(status?.amount),
     orderCode: status?.orderCode ?? null,
+  };
+}
+
+function createPayosReviewFromPaymentStatus(paymentStatus, orderLike, qrLike) {
+  const normalizedStatus = normalizePaymentStatusLike(paymentStatus);
+  const normalizedOrder = normalizeOrderLike(orderLike);
+  const normalizedQr = normalizeQrLike(qrLike);
+
+  return {
+    orderId: normalizedOrder?.orderId ?? null,
+    orderCode: normalizedOrder?.orderCode ?? normalizedStatus?.orderCode ?? null,
+    amount:
+      normalizedStatus?.amount ||
+      normalizedQr?.amountToPay ||
+      normalizedOrder?.finalAmount ||
+      normalizedOrder?.totalAmount ||
+      0,
+    customerName: normalizedOrder?.receiverName ?? normalizedOrder?.customerName ?? null,
+    customerEmail: normalizedOrder?.customerEmail ?? null,
+    status: normalizedStatus?.status || "UNPAID",
+  };
+}
+
+function isPayosApproved(status) {
+  return String(status || "").trim().toUpperCase() === "PAID";
+}
+
+function isPayosRejected(status) {
+  return String(status || "").trim().toUpperCase() === "FAILED";
+}
+
+function isPayosPendingConfirmation(status) {
+  return String(status || "").trim().toUpperCase() === "PENDING_CONFIRMATION";
+}
+
+function getPayosStatusLabel(status) {
+  switch (String(status || "").trim().toUpperCase()) {
+    case "PENDING":
+      return "Chờ bạn xác nhận thanh toán";
+    case "PENDING_CONFIRMATION":
+      return "Đã gửi yêu cầu xác nhận thanh toán";
+    case "PAID":
+      return "Đã thanh toán";
+    case "FAILED":
+      return "Thanh toán thất bại";
+    default:
+      return "Đang xử lý";
+  }
+}
+
+function navigateToCheckoutUrl(navigate, checkoutUrl) {
+  if (!checkoutUrl) {
+    return false;
+  }
+
+  try {
+    const targetUrl = new URL(checkoutUrl, window.location.origin);
+    navigate(`${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`, { replace: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function loadPayosPaymentSnapshot(orderId) {
+  const [orderDetail, qrPayload, statusPayload] = await Promise.all([
+    orderService.getOrderById(orderId),
+    paymentService.getOrderQr(orderId),
+    paymentService.getOrderStatus(orderId),
+  ]);
+
+  const normalizedOrder = normalizeOrderLike(orderDetail);
+  const normalizedQr = normalizeQrLike(qrPayload);
+  const normalizedStatus = normalizePaymentStatusLike(statusPayload);
+
+  return {
+    order: normalizedOrder,
+    qr: normalizedQr,
+    status: normalizedStatus,
+    review: createPayosReviewFromPaymentStatus(normalizedStatus, normalizedOrder, normalizedQr),
   };
 }
 
@@ -164,90 +240,13 @@ function normalizeQrLike(payload) {
 
   return {
     ...qr,
+    orderId: qr?.orderId ?? null,
     orderCode: qr?.orderCode ?? null,
     amountToPay: pickFirstNumber(qr?.amountToPay),
     qrCodeUrl: qr?.qrCodeUrl ?? null,
-  };
-}
-
-function createPseudoQrMatrix(seed) {
-  const normalizedSeed = String(seed || "PAYOS").trim() || "PAYOS";
-  const size = 21;
-  const matrix = [];
-
-  for (let row = 0; row < size; row += 1) {
-    const nextRow = [];
-
-    for (let col = 0; col < size; col += 1) {
-      const isFinder =
-        (row < 7 && col < 7) ||
-        (row < 7 && col >= size - 7) ||
-        (row >= size - 7 && col < 7);
-
-      if (isFinder) {
-        const localRow = row < 7 ? row : row - (size - 7);
-        const localCol = col < 7 ? col : col - (size - 7);
-        const ring = localRow === 0 || localRow === 6 || localCol === 0 || localCol === 6;
-        const center = localRow >= 2 && localRow <= 4 && localCol >= 2 && localCol <= 4;
-        nextRow.push(ring || center);
-        continue;
-      }
-
-      const charCode = normalizedSeed.charCodeAt((row * size + col) % normalizedSeed.length);
-      nextRow.push(((row * 17 + col * 13 + charCode) % 7) < 3);
-    }
-
-    matrix.push(nextRow);
-  }
-
-  return matrix;
-}
-
-function buildPayosQrDataUrl({ orderCode, amount, orderId }) {
-  const matrix = createPseudoQrMatrix(`${orderCode || ""}-${amount || 0}-${orderId || ""}`);
-  const cell = 8;
-  const padding = 16;
-  const width = matrix.length * cell + padding * 2;
-  const rects = [];
-
-  matrix.forEach((row, rowIndex) => {
-    row.forEach((filled, colIndex) => {
-      if (!filled) {
-        return;
-      }
-
-      rects.push(
-        `<rect x="${padding + colIndex * cell}" y="${padding + rowIndex * cell}" width="${cell}" height="${cell}" rx="1.6" fill="#0f172a" />`
-      );
-    });
-  });
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${width}" viewBox="0 0 ${width} ${width}">
-      <rect width="${width}" height="${width}" rx="28" fill="#ffffff" />
-      ${rects.join("")}
-    </svg>
-  `;
-
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function buildLocalPayosQr(orderLike) {
-  const normalizedOrder = normalizeOrderLike(orderLike);
-  const amountToPay = pickFirstNumber(normalizedOrder?.finalAmount, normalizedOrder?.totalAmount);
-
-  return {
-    orderCode: normalizedOrder?.orderCode || (normalizedOrder?.orderId ? `ORD-${normalizedOrder.orderId}` : "--"),
-    amountToPay,
-    bankName: "PayOS QR",
-    bankAccountNumber: "PAYOS-DEMO-001",
-    bankAccountName: "EyeCare Store",
-    transferContent: `PAYOS ${normalizedOrder?.orderCode || normalizedOrder?.orderId || ""}`.trim(),
-    qrCodeUrl: buildPayosQrDataUrl({
-      orderCode: normalizedOrder?.orderCode,
-      amount: amountToPay,
-      orderId: normalizedOrder?.orderId,
-    }),
+    transferContent: qr?.transferContent ?? null,
+    paymentStatus: String(qr?.paymentStatus ?? "").trim().toUpperCase() || null,
+    expiredAt: qr?.expiredAt ?? null,
   };
 }
 
@@ -368,8 +367,108 @@ function calculateSelectedItemsAmount(items) {
   );
 }
 
+function extractSelectedVariantIds(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((item) => Number(item?.variantID ?? item?.productVariantId))
+    .filter((variantId, index, allVariantIds) =>
+      Number.isFinite(variantId) && variantId > 0 && allVariantIds.indexOf(variantId) === index
+    );
+}
+
+async function purgeCheckedOutCartItems(dispatch, items) {
+  const removableIdentifiers = (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const itemId = Number(item?.itemId);
+
+      if (Number.isFinite(itemId) && itemId > 0) {
+        return itemId;
+      }
+
+      const variantId = Number(item?.variantID ?? item?.productVariantId);
+      return Number.isFinite(variantId) && variantId > 0 ? variantId : null;
+    })
+    .filter((identifier, index, allIdentifiers) =>
+      Number.isFinite(identifier) && identifier > 0 && allIdentifiers.indexOf(identifier) === index
+    );
+
+  if (!removableIdentifiers.length) {
+    return;
+  }
+
+  for (const identifier of removableIdentifiers) {
+    await dispatch(removeItem(identifier)).unwrap();
+  }
+}
+
 function getOrderIdentity(order) {
   return order?.orderId ?? order?.id ?? null;
+}
+
+function appendLocalStaffOrder({
+  user,
+  checkoutValues,
+  selectedCartItems,
+  selectedLensProduct,
+  hydratedOrder,
+}) {
+  const userId =
+    user?.id ??
+    hydratedOrder?.customerProfile?.id ??
+    hydratedOrder?.userId ??
+    hydratedOrder?.orderId ??
+    hydratedOrder?.orderCode ??
+    "guest";
+
+  if (!userId || !checkoutValues || !Array.isArray(selectedCartItems) || !selectedCartItems.length) {
+    return;
+  }
+
+  const shippingCost = pickFirstNumber(
+    hydratedOrder?.shippingFee,
+    hydratedOrder?.priceSummary?.shippingFee
+  );
+  const totalAmount = pickFirstNumber(
+    hydratedOrder?.finalAmount,
+    hydratedOrder?.totalAmount
+  );
+  const lensPrice = pickFirstNumber(
+    selectedLensProduct?.price,
+    hydratedOrder?.priceSummary?.lensPrice
+  );
+
+  const storedOrder = createStoredOrder({
+    userId,
+    user,
+    checkoutValues,
+    selectedCartItems,
+    selectedLensProduct,
+    lensPrice,
+    shippingCost,
+    totalAmount,
+  });
+
+  appendStoredOrder(userId, {
+    ...storedOrder,
+    id:
+      hydratedOrder?.orderId ??
+      hydratedOrder?.id ??
+      hydratedOrder?.orderCode ??
+      storedOrder.id,
+    orderId: hydratedOrder?.orderId ?? hydratedOrder?.id ?? null,
+    orderCode: hydratedOrder?.orderCode ?? storedOrder.orderNumber,
+    orderNumber: hydratedOrder?.orderCode ?? storedOrder.orderNumber,
+    createdAt: hydratedOrder?.createdAt ?? storedOrder.createdAt,
+    updatedAt: hydratedOrder?.updatedAt ?? storedOrder.createdAt,
+    paymentStatus:
+      hydratedOrder?.paymentStatus ??
+      hydratedOrder?.payment?.status ??
+      storedOrder.paymentStatus,
+    sourceChannel: hydratedOrder?.sourceChannel ?? "ONLINE",
+  });
 }
 
 async function hydrateOrderDetail(orderLike) {
@@ -601,8 +700,9 @@ function PayosQrCard({
   confirming,
 }) {
   const navigate = useNavigate();
+  const missingPayosData = !order?.orderId || !qrData?.qrCodeUrl;
 
-  if (loading) {
+  if (loading && missingPayosData) {
     return (
       <main className="min-h-screen bg-background px-4 py-10">
         <div className="mx-auto flex max-w-3xl items-center justify-center rounded-[28px] border border-slate-200 bg-white p-10 shadow-sm">
@@ -612,7 +712,32 @@ function PayosQrCard({
     );
   }
 
-  if (paymentReview?.status === "SALE_APPROVED") {
+  if (missingPayosData) {
+    return (
+      <main className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto max-w-3xl rounded-[28px] border border-rose-200 bg-white p-8 text-center shadow-sm sm:p-10">
+          <h1 className="text-2xl font-bold text-slate-900">Khong tai duoc ma QR PayOS</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500">
+            {error || "Backend chua tra ve du lieu orderId hoac qrCodeUrl cho trang thanh toan PayOS."}
+          </p>
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm text-slate-600">
+            <p>Order ID: {order?.orderId || "--"}</p>
+            <p>Order Code: {order?.orderCode || qrData?.orderCode || "--"}</p>
+            <p>QR URL: {qrData?.qrCodeUrl ? "Co du lieu" : "Thieu qrCodeUrl"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/user/orders")}
+            className="mt-6 rounded-2xl bg-slate-900 px-5 py-3 font-semibold text-white"
+          >
+            Ve danh sach don hang
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (isPayosApproved(paymentReview?.status)) {
     return (
       <SuccessCard
         orderCode={order?.orderCode}
@@ -623,9 +748,10 @@ function PayosQrCard({
     );
   }
 
-  const statusLabel = getPaymentReviewStatusLabel(paymentReview?.status);
-  const canConfirm = paymentReview?.status !== "CUSTOMER_CONFIRMED" && paymentReview?.status !== "SALE_APPROVED";
-  const wasRejected = paymentReview?.status === "SALE_REJECTED";
+  const statusLabel = getPayosStatusLabel(paymentReview?.status || qrData?.paymentStatus);
+  const canConfirm =
+    !isPayosPendingConfirmation(paymentReview?.status) && !isPayosApproved(paymentReview?.status);
+  const wasRejected = isPayosRejected(paymentReview?.status);
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
@@ -651,6 +777,7 @@ function PayosQrCard({
               <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
                 Đây là mã demo phía frontend để mô phỏng quy trình quét mã và sale xác nhận thanh toán.
               </p>
+
 
               <img
                 src={qrData?.qrCodeUrl}
@@ -716,17 +843,9 @@ function PayosQrCard({
             >
               {confirming
                 ? "Đang gửi xác nhận..."
-                : paymentReview?.status === "CUSTOMER_CONFIRMED"
+                : isPayosPendingConfirmation(paymentReview?.status)
                   ? "Đã xác nhận, chờ sale kiểm tra"
                   : "Tôi đã thanh toán"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate("/user/orders")}
-              className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-5 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Theo dõi đơn hàng
             </button>
           </div>
         </div>
@@ -778,8 +897,10 @@ function PayosPendingCard({ order, error }) {
 
 function CheckoutProcessStep() {
   const location = useLocation();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const currentCart = useSelector((state) => state.cart.cart);
+  const currentUser = useSelector((state) => state.auth.user);
   const [searchParams] = useSearchParams();
   const submittedRef = useRef(false);
 
@@ -792,7 +913,9 @@ function CheckoutProcessStep() {
     [currentCart, selectedCartItems]
   );
   const selectedPaymentMethod =
-    checkoutValues?.paymentMethod || searchParams.get("paymentMethod") || "COD";
+    location.pathname === "/payment/payos"
+      ? "PAYOS"
+      : checkoutValues?.paymentMethod || searchParams.get("paymentMethod") || "COD";
 
   const [order, setOrder] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
@@ -811,48 +934,29 @@ function CheckoutProcessStep() {
       setError("");
 
       try {
-        const [orderDetail, status] = await Promise.all([
-          orderService.getOrderById(orderId),
-          paymentService.getOrderStatus(orderId),
-        ]);
+        const snapshot = await loadPayosPaymentSnapshot(orderId);
 
         if (!mounted) {
           return;
         }
 
-        setOrder(normalizeOrderLike(orderDetail));
-        setPaymentStatus(normalizePaymentStatusLike(status));
+        setOrder(snapshot.order);
+        setQrData(snapshot.qr);
+        setPaymentStatus(snapshot.status);
+        setPaymentReview(snapshot.review);
 
-        const normalizedOrder = normalizeOrderLike(orderDetail);
-        const paymentMethod = normalizedOrder?.paymentMethod || selectedPaymentMethod;
-        await refreshServerCart(dispatch);
+        // Do not block the PayOS page on auxiliary cart sync work.
+        setLoading(false);
+
+        const paymentMethod = snapshot.order?.paymentMethod || selectedPaymentMethod;
+
+        refreshServerCart(dispatch);
 
         if (paymentMethod === "PAYOS") {
-          const nextQr = buildLocalPayosQr(normalizedOrder);
-          const nextReview =
-            getPaymentReviewRecord(normalizedOrder?.orderId) ||
-            ensurePayosPaymentReviewRecord({
-              orderId: normalizedOrder?.orderId,
-              orderCode: normalizedOrder?.orderCode,
-              amount: nextQr.amountToPay,
-              customerName: normalizedOrder?.receiverName,
-              customerEmail: normalizedOrder?.customerEmail,
-            });
-
-          if (mounted) {
-            setQrData(nextQr);
-            setPaymentReview(nextReview);
-            setPaymentStatus({
-              status: nextReview?.status === "SALE_APPROVED" ? "PAID" : "PENDING",
-              amount: nextQr.amountToPay,
-              orderCode: normalizedOrder?.orderCode,
-            });
-          }
-
           return;
         }
 
-        if (paymentMethod === "BANK_TRANSFER" && normalizePaymentStatusLike(status)?.status !== "PAID") {
+        if (paymentMethod === "BANK_TRANSFER" && snapshot.status?.status !== "PAID") {
           try {
             const qr = await paymentService.getOrderQr(orderId);
 
@@ -912,6 +1016,29 @@ function CheckoutProcessStep() {
           paymentMethod: normalizedResponse?.paymentMethod || selectedPaymentMethod,
           paymentStatus: normalizedResponse?.paymentStatus || "UNPAID",
         });
+        const paymentMethod =
+          normalizedResponse?.paymentMethod || selectedPaymentMethod;
+
+        if (paymentMethod === "PAYOS") {
+          const redirected = navigateToCheckoutUrl(
+            navigate,
+            normalizedResponse?.checkoutUrl
+          );
+
+          if (redirected) {
+            return;
+          }
+
+          if (normalizedResponse?.orderId) {
+            navigate(`/payment/payos?orderId=${normalizedResponse.orderId}`, {
+              replace: true,
+            });
+            return;
+          }
+
+          throw new Error("Backend chua tra ve orderId hoac checkoutUrl cho PAYOS.");
+        }
+
         const hydratedOrder = await hydrateOrderDetail(response);
 
         if (!mounted) {
@@ -919,11 +1046,17 @@ function CheckoutProcessStep() {
         }
 
         setOrder(hydratedOrder);
+        appendLocalStaffOrder({
+          user: currentUser,
+          checkoutValues,
+          selectedCartItems: resolvedSelectedCartItems,
+          selectedLensProduct,
+          hydratedOrder,
+        });
+        await purgeCheckedOutCartItems(dispatch, resolvedSelectedCartItems);
+        dispatch(removeSelectedItems(extractSelectedVariantIds(resolvedSelectedCartItems)));
         await refreshServerCart(dispatch);
         dispatch(fetchProducts());
-
-        const paymentMethod =
-          hydratedOrder?.paymentMethod || normalizedResponse?.paymentMethod || selectedPaymentMethod;
 
         if (paymentMethod === "COD") {
           setPaymentStatus({
@@ -960,27 +1093,6 @@ function CheckoutProcessStep() {
 
           return;
         }
-
-        if (paymentMethod === "PAYOS") {
-          const nextQr = buildLocalPayosQr(hydratedOrder);
-          const nextReview = ensurePayosPaymentReviewRecord({
-            orderId: getOrderIdentity(hydratedOrder),
-            orderCode: hydratedOrder?.orderCode || normalizedResponse?.orderCode,
-            amount: nextQr.amountToPay,
-            customerName: hydratedOrder?.receiverName,
-            customerEmail: hydratedOrder?.customerEmail,
-          });
-
-          if (mounted) {
-            setQrData(nextQr);
-            setPaymentReview(nextReview);
-            setPaymentStatus({
-              status: nextReview?.status === "SALE_APPROVED" ? "PAID" : "PENDING",
-              amount: nextQr.amountToPay,
-              orderCode: hydratedOrder?.orderCode || normalizedResponse?.orderCode,
-            });
-          }
-        }
       } catch (nextError) {
         if (mounted) {
           setError(getApiErrorMessage(nextError, "Không thể tạo đơn hàng từ backend."));
@@ -1005,6 +1117,7 @@ function CheckoutProcessStep() {
     checkoutValues,
     dispatch,
     currentCart,
+    currentUser,
     orderIdFromQuery,
     resolvedSelectedCartItems,
     selectedLensProduct,
@@ -1043,21 +1156,26 @@ function CheckoutProcessStep() {
       return undefined;
     }
 
-    const syncReviewState = () => {
-      const nextReview = getPaymentReviewRecord(order.orderId);
+    let active = true;
 
-      if (!nextReview) {
-        return;
-      }
+    const syncReviewState = async () => {
+      try {
+        const [nextStatus, nextQr] = await Promise.all([
+          paymentService.getOrderStatus(order.orderId).then(normalizePaymentStatusLike),
+          paymentService.getOrderQr(order.orderId).then(normalizeQrLike),
+        ]);
 
-      setPaymentReview(nextReview);
+        if (!active) {
+          return;
+        }
 
-      if (nextReview.status === "SALE_APPROVED") {
-        setPaymentStatus({
-          status: "PAID",
-          amount: qrData?.amountToPay || order?.finalAmount || order?.totalAmount,
-          orderCode: order?.orderCode,
-        });
+        setPaymentStatus(nextStatus);
+        setQrData(nextQr);
+        setPaymentReview(createPayosReviewFromPaymentStatus(nextStatus, order, nextQr));
+      } catch {
+        if (!active) {
+          return;
+        }
       }
     };
 
@@ -1065,9 +1183,57 @@ function CheckoutProcessStep() {
     const intervalId = window.setInterval(syncReviewState, 3000);
 
     return () => {
+      active = false;
       window.clearInterval(intervalId);
     };
   }, [order?.orderId, order?.orderCode, order?.paymentMethod, order?.finalAmount, order?.totalAmount, qrData?.amountToPay, selectedPaymentMethod]);
+
+  useEffect(() => {
+    const paymentMethod = order?.paymentMethod || selectedPaymentMethod;
+
+    if (!order?.orderId || paymentMethod !== "PAYOS") {
+      return undefined;
+    }
+
+    const eventSource = new EventSource(buildAuthenticatedSseUrl("/payments/payos/stream/customer"));
+
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+
+        if (String(payload?.orderId ?? "") !== String(order.orderId)) {
+          return;
+        }
+
+        const nextStatus = normalizePaymentStatusLike({
+          status: payload?.paymentStatus,
+          amount:
+            payload?.payment?.amount ??
+            qrData?.amountToPay ??
+            order?.finalAmount ??
+            order?.totalAmount,
+          orderCode: payload?.orderCode ?? order?.orderCode,
+        });
+
+        setPaymentStatus(nextStatus);
+        setPaymentReview(createPayosReviewFromPaymentStatus(nextStatus, order, qrData));
+
+        if (payload?.eventType === "payment_approved" && nextStatus.status === "PAID") {
+          navigate(payload?.redirectUrl || "/payment/success", { replace: true });
+        }
+      } catch {
+        // ignore invalid SSE payload
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [navigate, order?.finalAmount, order?.orderCode, order?.orderId, order?.paymentMethod, order?.totalAmount, qrData?.amountToPay, selectedPaymentMethod]);
 
   async function handleCustomerConfirmPayos() {
     if (!order?.orderId) {
@@ -1078,19 +1244,22 @@ function CheckoutProcessStep() {
     setError("");
 
     try {
-      const nextReview = markCustomerPaid(order.orderId, {
-        orderCode: order?.orderCode,
-        amount: qrData?.amountToPay || order?.finalAmount || order?.totalAmount,
-        customerName: order?.receiverName,
-        customerEmail: order?.customerEmail,
-      });
+      let nextReview = null;
+
+      try {
+        await paymentService.confirmPayosPayment(order.orderId);
+        const [nextStatus, nextQr] = await Promise.all([
+          paymentService.getOrderStatus(order.orderId).then(normalizePaymentStatusLike),
+          paymentService.getOrderQr(order.orderId).then(normalizeQrLike),
+        ]);
+        nextReview = createPayosReviewFromPaymentStatus(nextStatus, order, nextQr);
+        setQrData(nextQr);
+        setPaymentStatus(nextStatus);
+      } catch (apiError) {
+        throw apiError;
+      }
 
       setPaymentReview(nextReview);
-      setPaymentStatus({
-        status: "PENDING",
-        amount: qrData?.amountToPay || order?.finalAmount || order?.totalAmount,
-        orderCode: order?.orderCode,
-      });
       appToast.success("Đã gửi xác nhận thanh toán. Sale sẽ kiểm tra giao dịch cho bạn.");
     } catch (nextError) {
       setError(getApiErrorMessage(nextError, "Không thể gửi xác nhận thanh toán."));
@@ -1124,6 +1293,27 @@ function CheckoutProcessStep() {
     paymentStatus?.status || order?.paymentStatus || checkoutSnapshot?.paymentStatus || "UNPAID";
   const displayedPaymentMethod =
     order?.paymentMethod || checkoutSnapshot?.paymentMethod || selectedPaymentMethod;
+  const payosDisplayOrder = order || {
+    orderId: checkoutSnapshot?.orderId ?? orderIdFromQuery ?? null,
+    orderCode: displayedOrderCode,
+    finalAmount: displayedAmount,
+    totalAmount: displayedAmount,
+    paymentMethod: "PAYOS",
+    paymentStatus: displayedPaymentStatus,
+    receiverName: currentUser?.fullName ?? checkoutValues?.receiverName ?? null,
+    customerEmail: currentUser?.email ?? null,
+  };
+
+  if (location.pathname === "/payment/success") {
+    return (
+      <SuccessCard
+        orderCode={displayedOrderCode}
+        paymentMethod={displayedPaymentMethod}
+        paymentStatus={displayedPaymentStatus}
+        totalAmount={displayedAmount}
+      />
+    );
+  }
 
   if (selectedPaymentMethod === "COD" && loading && !displayedOrderCode && !displayedAmount) {
     return (
@@ -1161,8 +1351,8 @@ function CheckoutProcessStep() {
   if (selectedPaymentMethod === "PAYOS") {
     return (
       <PayosQrCard
-        order={order}
-        qrData={qrData || buildLocalPayosQr(order)}
+        order={payosDisplayOrder}
+        qrData={qrData}
         paymentReview={paymentReview}
         loading={loading}
         error={error}
@@ -1176,6 +1366,7 @@ function CheckoutProcessStep() {
 }
 
 export default function CheckoutPage() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const paymentStep = searchParams.get("step");
   const [form] = Form.useForm();
@@ -1215,7 +1406,13 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  if (paymentStep === "process" || paymentStep === "result") {
+  if (
+    paymentStep === "process" ||
+    paymentStep === "result" ||
+    location.pathname === "/payment/payos" ||
+    location.pathname === "/payment/success" ||
+    searchParams.has("orderId")
+  ) {
     return <CheckoutProcessStep />;
   }
 

@@ -1,4 +1,4 @@
-const PAYMENT_REVIEW_KEY = "payos-payment-review-store";
+﻿const PAYMENT_REVIEW_KEY = "payos-payment-review-store";
 
 function safeRead() {
   try {
@@ -102,17 +102,41 @@ export function markSaleRejected(orderId, payload = {}) {
 }
 
 export function listSalePendingPaymentReviews() {
-  return safeRead().filter((item) => item?.status === "CUSTOMER_CONFIRMED");
+  return safeRead().filter((item) =>
+    ["CUSTOMER_CONFIRMED", "PENDING_CONFIRMATION"].includes(
+      String(item?.status || "").trim().toUpperCase()
+    )
+  );
+}
+
+export function listSaleApprovedPaymentReviews() {
+  return safeRead().filter((item) =>
+    ["PAID", "SALE_APPROVED"].includes(String(item?.status || "").trim().toUpperCase())
+  );
+}
+
+export function removePaymentReviewRecord(orderId) {
+  const normalizedId = normalizeId(orderId);
+
+  if (!normalizedId) {
+    return;
+  }
+
+  safeWrite(safeRead().filter((item) => normalizeId(item?.orderId) !== normalizedId));
 }
 
 export function getPaymentReviewStatusLabel(status) {
   switch (String(status || "").trim().toUpperCase()) {
+    case "UNPAID":
     case "PENDING_CUSTOMER_CONFIRMATION":
       return "Chờ khách xác nhận chuyển khoản";
+    case "PENDING_CONFIRMATION":
     case "CUSTOMER_CONFIRMED":
-      return "Khách đã báo chuyển khoản";
+      return "Khách đã chuyển khoản";
+    case "PAID":
     case "SALE_APPROVED":
       return "Sale đã xác nhận";
+    case "FAILED":
     case "SALE_REJECTED":
       return "Sale từ chối xác nhận";
     default:

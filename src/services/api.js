@@ -3,7 +3,7 @@ import axios from "axios";
 const UNAUTHORIZED_EVENT = "app:unauthorized";
 const DEFAULT_API_BASE_URL = "http://localhost:8080/api";
 
-function normalizeApiBaseUrl(rawBaseUrl) {
+export function normalizeApiBaseUrl(rawBaseUrl) {
   if (!rawBaseUrl || typeof rawBaseUrl !== "string") {
     return DEFAULT_API_BASE_URL;
   }
@@ -17,6 +17,33 @@ function normalizeApiBaseUrl(rawBaseUrl) {
   return normalizedBaseUrl.endsWith("/api")
     ? normalizedBaseUrl
     : `${normalizedBaseUrl}/api`;
+}
+
+export function buildApiUrl(path) {
+  const baseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+  const normalizedPath = String(path || "").trim();
+
+  if (!normalizedPath) {
+    return baseUrl;
+  }
+
+  return normalizedPath.startsWith("/")
+    ? `${baseUrl}${normalizedPath}`
+    : `${baseUrl}/${normalizedPath}`;
+}
+
+export function buildAuthenticatedSseUrl(path) {
+  const token = getAccessToken();
+  const url = new URL(buildApiUrl(path));
+
+  if (token) {
+    // Native EventSource cannot attach Authorization headers, so we pass the token
+    // as query params for backends that support SSE auth via URL.
+    url.searchParams.set("access_token", token);
+    url.searchParams.set("token", token);
+  }
+
+  return url.toString();
 }
 
 export function getAccessToken() {

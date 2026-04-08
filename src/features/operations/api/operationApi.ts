@@ -108,7 +108,7 @@ function applyLocalFilters(items: OperationOrderResponse[], filters?: OperationO
 function mergeOperationOrders(primary: OperationOrderResponse[], secondary: OperationOrderResponse[]) {
   const map = new Map<string, OperationOrderResponse>();
 
-  [...normalizeOrders(secondary), ...normalizeOrders(primary)].forEach((item) => {
+  [...normalizeOrders(primary), ...normalizeOrders(secondary)].forEach((item) => {
     const key = String(item?.orderId ?? "");
 
     if (!key) {
@@ -198,15 +198,39 @@ function syncLocalOperationOrder(serverOrder: OperationOrderResponse | null) {
   return syncedOrder;
 }
 
+function syncLocalOperationOrderPreservingWorkflow(serverOrder: OperationOrderResponse | null) {
+  if (!serverOrder?.orderId) {
+    return serverOrder;
+  }
+
+  const syncedOrder = normalizeOperationStatus(serverOrder);
+  let mergedOrder: OperationOrderResponse | null = null;
+
+  updateLocalOperationOrder(syncedOrder.orderId, (order) => {
+    mergedOrder = {
+      ...order,
+      ...syncedOrder,
+      status: order.status,
+      statusLabel: order.statusLabel,
+      statusHistory: Array.isArray(order.statusHistory) ? order.statusHistory : syncedOrder.statusHistory,
+    };
+
+    return mergedOrder;
+  });
+
+  return mergedOrder || syncedOrder;
+}
+
 export async function getOperationOrders(params?: OperationOrderFilters) {
   const localOrders = normalizeOrders(readLocalOperationOrders());
 
   try {
-    const response = await api.get<OperationOrderResponse[]>(BASE_PATH, {
-      params: cleanParams(params),
-    });
-
-    return applyLocalFilters(mergeOperationOrders(response.data, localOrders), params);
+    // Backend status filtering is currently inconsistent, so fetch the shared
+    // operation list once and apply the active filters locally for stable tabs.
+    const response = await api.get<OperationOrderResponse[]>(BASE_PATH);
+    const mergedOrders = mergeOperationOrders(response.data, localOrders);
+    writeLocalOperationOrders(mergedOrders);
+    return applyLocalFilters(mergedOrders, params);
   } catch (error) {
     if (localOrders.length > 0) {
       return applyLocalFilters(localOrders, params);
@@ -267,12 +291,6 @@ export async function updateOperationOrderStatus(
 ) {
   try {
     const response = await api.patch<OperationOrderResponse>(`${BASE_PATH}/${orderId}/status`, payload);
-
-    if (String(payload.status) === "COMPLETED") {
-      removeLocalOperationOrder(orderId);
-      return normalizeOperationStatus(response.data);
-    }
-
     return syncLocalOperationOrder(response.data);
   } catch (error) {
     try {
@@ -280,12 +298,7 @@ export async function updateOperationOrderStatus(
       const confirmedOrder = normalizeOperationStatus(detailResponse.data);
 
       if (String(confirmedOrder?.status) === String(payload.status)) {
-        if (String(payload.status) === "COMPLETED") {
-          removeLocalOperationOrder(orderId);
-        } else {
-          syncLocalOperationOrder(confirmedOrder);
-        }
-
+        syncLocalOperationOrder(confirmedOrder);
         return confirmedOrder;
       }
     } catch {
@@ -302,13 +315,8 @@ export async function updateOperationOrderStatus(
         statusHistory: appendLocalStatusHistory(order, payload.status, payload.note),
       };
 
-      return payload.status === "COMPLETED" ? null : nextOrder;
+      return nextOrder;
     });
-
-    if (payload.status === "COMPLETED") {
-      removeLocalOperationOrder(orderId);
-      return null;
-    }
 
     if (localOrder) {
       return localOrder;
@@ -324,7 +332,7 @@ export async function assignOperationLogistics(
 ) {
   try {
     const response = await api.patch<OperationOrderResponse>(`${BASE_PATH}/${orderId}/logistics`, payload);
-    return syncLocalOperationOrder(response.data);
+    return syncLocalOperationOrderPreservingWorkflow(response.data);
   } catch (error) {
     const localOrder = updateLocalOperationOrder(orderId, (order) => ({
       ...order,
@@ -348,7 +356,7 @@ export async function updateOperationTracking(
 ) {
   try {
     const response = await api.patch<OperationOrderResponse>(`${BASE_PATH}/${orderId}/tracking`, payload);
-    return syncLocalOperationOrder(response.data);
+    return syncLocalOperationOrderPreservingWorkflow(response.data);
   } catch (error) {
     const localOrder = updateLocalOperationOrder(orderId, (order) => ({
       ...order,

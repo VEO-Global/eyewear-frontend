@@ -6,6 +6,7 @@ const STAFF_HANDOFF_QUEUE_KEY = "staff-handoff-local-queue";
 const OPERATION_QUEUE_KEY = "operation-local-queue";
 const STAFF_COMPLETED_PRESCRIPTION_IDS_KEY = "staff-completed-prescription-order-ids";
 const STAFF_HANDED_OFF_OPERATION_IDS_KEY = "staff-handed-off-operation-order-ids";
+export const LOCAL_STORAGE_QUEUE_UPDATED_EVENT = "app:local-storage-queue-updated";
 
 function safeRead(key) {
   try {
@@ -19,7 +20,16 @@ function safeRead(key) {
 
 function safeWrite(key, items) {
   try {
-    localStorage.setItem(key, JSON.stringify(Array.isArray(items) ? items : []));
+    const normalizedItems = Array.isArray(items) ? items : [];
+    localStorage.setItem(key, JSON.stringify(normalizedItems));
+    window.dispatchEvent(
+      new CustomEvent(LOCAL_STORAGE_QUEUE_UPDATED_EVENT, {
+        detail: {
+          key,
+          size: normalizedItems.length,
+        },
+      })
+    );
   } catch {
     // ignore storage failures
   }
@@ -27,6 +37,19 @@ function safeWrite(key, items) {
 
 function normalizeId(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeStatusValue(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function toTimestamp(value) {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function uniqueById(items) {
@@ -67,6 +90,22 @@ export function removeLocalReadyForHandoffOrder(orderId) {
   );
 }
 
+export function pruneLocalReadyForHandoffOrders(orderIds = []) {
+  const idsToRemove = new Set(
+    (Array.isArray(orderIds) ? orderIds : []).map((item) => normalizeId(item)).filter(Boolean)
+  );
+
+  if (!idsToRemove.size) {
+    return;
+  }
+
+  writeLocalReadyForHandoffOrders(
+    readLocalReadyForHandoffOrders().filter(
+      (item) => !idsToRemove.has(normalizeId(item?.id ?? item?.orderId))
+    )
+  );
+}
+
 export function readCompletedPrescriptionOrderIds() {
   return new Set(safeRead(STAFF_COMPLETED_PRESCRIPTION_IDS_KEY).map((item) => normalizeId(item)));
 }
@@ -100,11 +139,91 @@ export function isPrescriptionOrderStillVisible(order) {
 
 export function isHandoffOrderStillVisible(order) {
   const id = normalizeId(order?.id ?? order?.orderId);
-  return Boolean(id) && !readHandedOffOperationOrderIds().has(id);
+  return Boolean(id) && !readHandedOffOperationOrderIds().has(id) && !hasOrderEnteredOperations(id);
+}
+
+export function getPrescriptionReviewStatus(order) {
+  return normalizeStatusValue(
+    order?.prescription?.reviewStatus ??
+      order?.prescriptionReviewStatus ??
+      order?.reviewStatus
+  );
+}
+
+export function canOrderBeHandedOff(order) {
+  const phase = normalizeStatusValue(order?.phase);
+  const status = normalizeStatusValue(order?.status);
+  const hasPrescription = Boolean(order?.requiresPrescription || order?.prescription);
+  const prescriptionReviewStatus = getPrescriptionReviewStatus(order);
+
+  const isReadyForHandoff =
+    phase === "PROCESSING" ||
+    phase === "READY_TO_DELIVER";
+
+  if (!isReadyForHandoff) {
+    return false;
+  }
+
+  if (hasPrescription && prescriptionReviewStatus !== "APPROVED") {
+    return false;
+  }
+
+  return true;
+}
+
+export function canUseLocalHandoffFallback(order) {
+  const hasPrescription = Boolean(order?.requiresPrescription || order?.prescription);
+
+  if (!hasPrescription) {
+    return true;
+  }
+
+  return getPrescriptionReviewStatus(order) === "APPROVED";
+}
+
+export function sortOrdersNewestFirst(orders) {
+  return [...(Array.isArray(orders) ? orders : [])].sort((left, right) => {
+    const rightTime = toTimestamp(right?.updatedAt ?? right?.createdAt);
+    const leftTime = toTimestamp(left?.updatedAt ?? left?.createdAt);
+
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return normalizeId(right?.id ?? right?.orderId).localeCompare(
+      normalizeId(left?.id ?? left?.orderId)
+    );
+  });
+}
+
+export function getHandoffBlockReason(order) {
+  if (canOrderBeHandedOff(order)) {
+    return "";
+  }
+
+  const hasPrescription = Boolean(order?.requiresPrescription || order?.prescription);
+
+  if (hasPrescription) {
+    return "Chờ duyệt đơn thuốc";
+  }
+
+  return "Chưa đủ điều kiện bàn giao";
 }
 
 export function readLocalOperationOrders() {
   return safeRead(OPERATION_QUEUE_KEY);
+}
+
+export function hasOrderEnteredOperations(orderId) {
+  const normalizedId = normalizeId(orderId);
+
+  if (!normalizedId) {
+    return false;
+  }
+
+  return readLocalOperationOrders().some(
+    (item) => normalizeId(item?.orderId ?? item?.id) === normalizedId
+  );
 }
 
 export function writeLocalOperationOrders(items) {
@@ -126,14 +245,29 @@ export function removeLocalOperationOrder(orderId) {
 }
 
 export function createLocalReadyForHandoffOrder(order) {
+  const approvedPrescription = order?.prescription
+    ? {
+        ...order.prescription,
+        reviewStatus:
+          order.prescription?.reviewStatus ??
+          order?.prescriptionReviewStatus ??
+          "APPROVED",
+        reviewNote:
+          order.prescription?.reviewNote ?? order.prescription?.note ?? "Đã kiểm tra đơn thuốc",
+      }
+    : null;
+
   return {
     ...order,
     id: order?.id ?? order?.orderId,
     orderId: order?.id ?? order?.orderId,
-    phase: ORDER_PHASE.READY_TO_DELIVER,
-    status: "READY_TO_DELIVER",
+    phase: ORDER_PHASE.PROCESSING,
+    status: "PENDING_VERIFICATION",
     statusLabel: "Chờ bàn giao đơn hàng",
     phaseLabel: "Chờ bàn giao đơn hàng",
+    prescriptionReviewStatus:
+      order?.prescriptionReviewStatus ?? approvedPrescription?.reviewStatus ?? null,
+    prescription: approvedPrescription,
   };
 }
 
